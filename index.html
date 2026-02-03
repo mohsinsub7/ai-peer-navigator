@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BH Navigator — Behavioral Health Demo</title>
+ <script src="auth-check.js"></script>
+<meta name="description" content="Behavioral Health Navigator demo — choose Dashboard, Case Management, or OUD Pathway tools.">
+<style>
+  :root{
+    --ink:#0f172a; --ink-2:#1e293b; --evergreen:#134e4a; --teal:#1f6f5f;
+    --bg:#f6f7fb; --card:#ffffff; --border:#e5e7eb; --muted:#64748b;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; color:var(--ink);
+    background:
+      radial-gradient(1000px 600px at 120% -10%, rgba(31,111,95,.12), transparent 60%),
+      radial-gradient(900px 600px at -20% 10%, rgba(19,78,74,.10), transparent 55%),
+      linear-gradient(180deg, #fafcff, #f7faf9 60%, #f6f7fb);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    line-height:1.55;
+  }
+  header{
+    padding:18px 22px; display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(135deg, var(--ink), var(--ink-2)); color:#fff;
+  }
+  .logo{display:flex; align-items:center; gap:12px}
+  .logo-dot{width:36px;height:36px;border-radius:50%;
+    background:radial-gradient(circle at 30% 30%, #e9fff7 0%, #3aa089 60%, #134e4a 100%);
+    box-shadow:0 0 0 3px rgba(255,255,255,.18) inset, 0 6px 16px rgba(0,0,0,.2);
+  }
+  .brand{margin:0;font-weight:800;letter-spacing:.25px;font-size:18px}
+  nav{display:flex;gap:8px;flex-wrap:wrap}
+  .nav-btn{padding:8px 12px;border-radius:10px;font-weight:600;text-decoration:none;cursor:pointer;
+    color:#e6f8f4;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.15)}
+  .nav-btn:hover,.nav-btn.active{background:#fff;color:#0f2f29}
+  .container{max-width:1200px;margin:0 auto;padding:22px 16px 28px}
+  .hero{background:linear-gradient(135deg, rgba(19,78,74,.06), rgba(31,111,95,.06));
+    border:1px solid var(--border);border-radius:18px;padding:26px 20px;box-shadow:0 8px 26px rgba(15,47,41,.06)}
+  .hero-inner{display:flex;gap:18px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+  .hero h1{margin:0;font-size:32px;letter-spacing:.2px}
+  .kicker{font-size:13px;color:#e6fff7;background:linear-gradient(135deg,#13564c,#1f6f5f);
+    display:inline-block;border-radius:999px;padding:4px 10px;border:1px solid rgba(255,255,255,.25)}
+  .sub{color:var(--muted);margin-top:6px}
+  .quick-cta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btn{border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-weight:700;cursor:pointer}
+  .btn.primary{background:#0f2f29;color:#fff}
+  .btn.ghost{background:#fff;color:#0f2f29}
+  .btn:hover{transform:translateY(-1px);box-shadow:0 8px 18px rgba(0,0,0,.08)}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:16px}
+  @media (max-width:900px){.tiles{grid-template-columns:1fr}}
+  .tile{position:relative;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;
+    overflow:hidden;box-shadow:0 1px 2px rgba(0,0,0,.05);transition:transform .15s, box-shadow .2s;text-decoration:none;color:inherit}
+  .tile:hover{transform:translateY(-2px);box-shadow:0 16px 30px rgba(0,0,0,.08)}
+  .tile h3{margin:0 0 6px;font-size:18px}
+  .tile .desc{font-size:14px;color:var(--muted)}
+  .chip{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid var(--border);font-size:12px;background:#f1f5f9;color:#0f2f29;margin-right:6px}
+  .go{margin-top:10px;display:inline-flex;gap:8px;align-items:center}
+  .go .arrow{transition:transform .2s}.tile:hover .go .arrow{transform:translateX(3px)}
+  footer{color:#335d57;text-align:center;padding:20px 16px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    <div>
+      <div class="brand">BH Navigator</div>
+      <div style="font-size:12px;opacity:.9">Care Coordination • Behavioral Health • SUD</div>
+    </div>
+  </div>
+  <nav>
+    <a class="nav-btn active" href="index.html">Home</a>
+    <a class="nav-btn" href="dashboard.html">Dashboard</a>
+    <a class="nav-btn" href="casemanagementtool.html">Case Management</a>
+    <a class="nav-btn" href="oud.html">OUD Pathway</a>
+    <a class="nav-btn" href="ai-peer-assist.html">AI Peer Assist</a>
+    <a class="nav-btn" href="clinical-data-insights.html">Clinical Insights (AI)</a>
+    <a class="nav-btn" href="instantinsights-ai.html">Instant Insights (AI)</a>
+  </nav>
+</header>
+
+<main class="container">
+  <section class="hero">
+    <div class="hero-inner">
+      <div>
+        <span class="kicker">Welcome</span>
+        <h1>Choose your tools</h1>
+        <div class="sub">Demo only • Browser-only • No PHI</div>
+        <div class="quick-cta">
+          <a class="btn primary" href="dashboard.html">Open Network Dashboard</a>
+          <a class="btn ghost" href="casemanagementtool.html">Open Case Management</a>
+          <a class="btn ghost" href="oud.html">Open OUD Pathway</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tiles">
+    <a class="tile" href="dashboard.html">
+      <h3>Network Dashboard & Reporting</h3>
+      <div class="desc">Encounters, quality, and “Open Pathway” deep links with clinic-ready exports.</div>
+      <div style="margin-top:8px">
+        <span class="chip">Inpatient/ED</span>
+        <span class="chip">No FU (OUD)</span>
+        <span class="chip">MAT Initiation</span>
+      </div>
+      <div class="go">Open <span class="arrow">→</span></div>
+    </a>
+    <a class="tile" href="casemanagementtool.html">
+      <h3>Case Management — Barrier → Z-Code & Letter</h3>
+      <div class="desc">Turn rough barrier notes into ICD-10 (Z) codes, a clean chart snippet, and a ready-to-send support letter.</div>
+      <div style="margin-top:8px">
+        <span class="chip">Multi-language</span>
+        <span class="chip">NYC resources</span>
+        <span class="chip">Word export</span>
+      </div>
+      <div class="go">Open <span class="arrow">→</span></div>
+    </a>
+    <a class="tile" href="oud.html">
+      <h3>OUD Pathway Coach</h3>
+      <div class="desc">Dayboard (≤72h), FU & MOUD timers, Pharmacy Finder, PA tips, and an Evidence Ledger.</div>
+      <div style="margin-top:8px">
+        <span class="chip">42 CFR Part 2 safe-mode</span>
+        <span class="chip">Pharmacy Finder</span>
+        <span class="chip">CSV export</span>
+      </div>
+      <div class="go">Open <span class="arrow">→</span></div>
+    </a>
+    <a class="tile" href="clinical-data-insights.html">
+      <h3>Clinical Data Insights — AI Analytics</h3>
+      <div class="desc">Upload clinical datasets (CSV, Excel, PDF) and get AI-powered insights across behavioral health, SUD, SDOH, quality measures, and billing.</div>
+      <div style="margin-top:8px">
+        <span class="chip">Multi-domain</span>
+        <span class="chip">AI Analysis</span>
+        <span class="chip">PDF Export</span>
+      </div>
+      <div class="go">Open <span class="arrow">→</span></div>
+    </a>
+    <a class="tile" href="ai-peer-assist.html">
+      <h3>🤝 AI Peer Assist — Evidence-Based Support</h3>
+      <div class="desc">Get guidance on peer support roles, ethics, boundaries, documentation, and recovery principles powered by Vertex AI Search.</div>
+      <div style="margin-top:8px">
+        <span class="chip">Peer Support</span>
+        <span class="chip">Evidence-Based</span>
+        <span class="chip">Grounded Knowledge</span>
+      </div>
+      <div class="go">Open <span class="arrow">→</span></div>
+    </a>
+  </section>
+</main>
+
+<footer>Demo only • Dummy data • No PHI</footer>
+</body>
+</html>

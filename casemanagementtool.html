@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script src="auth-check.js" defer onerror="console.warn(\'auth-check.js not loaded\')"></script>
+  <title>Case Management Tool</title>
+  <style>
+    :root{
+      --primary:#0f172a;--secondary:#1e293b;--accent:#2563eb;--success:#10b981;--warning:#f59e0b;--error:#ef4444;--info:#3b82f6;
+      --bg:#f6f7fb;--card:#fff;--border:#e5e7eb;--text:#111827;--muted:#6b7280
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+    .header{background:linear-gradient(135deg,var(--primary),var(--secondary));color:#fff;padding:1.5rem;box-shadow:0 2px 4px rgba(0,0,0,.1)}
+    .header h1{font-size:1.5rem;margin-bottom:.5rem}.header .subtitle{opacity:.9;font-size:.875rem}
+    .nav{display:flex;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
+    .nav-link{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:.5rem 1rem;border-radius:10px;text-decoration:none;font-weight:600;transition:.2s;cursor:pointer}
+    .nav-link:hover,.nav-link.active{background:#fff;color:var(--primary)}
+    .status-banner{background:var(--warning);color:#fff;padding:.75rem 1.5rem;font-size:.875rem}
+    .container{max-width:1200px;margin:2rem auto;padding:0 1rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
+    @media(max-width:768px){.grid,.grid-3{grid-template-columns:1fr}}
+    h2{font-size:1.25rem;font-weight:600;margin-bottom:1rem;color:var(--primary);display:flex;align-items:center;gap:.5rem}
+    h3{font-size:1rem;font-weight:600;margin:1rem 0 .5rem;color:var(--secondary)}
+    .form-group{margin-bottom:1rem}
+    label{display:block;font-weight:500;margin-bottom:.5rem;color:var(--secondary)}
+    textarea,input[type="text"],select{width:100%;padding:.75rem;border:1px solid var(--border);border-radius:8px;font-size:.9rem;background:#fff;transition:.2s}
+    textarea:focus,input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+    textarea{min-height:120px;resize:vertical}
+    .checkbox-group{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+    .checkbox-label{display:flex;align-items:center;padding:.5rem;border-radius:6px;cursor:pointer;transition:.2s}
+    .checkbox-label:hover{background:var(--bg)}
+    .checkbox-label input{width:auto;margin-right:.5rem}
+    .btn{padding:.625rem 1.25rem;border:none;border-radius:8px;font-weight:600;font-size:.875rem;cursor:pointer;margin-right:.5rem;margin-bottom:.5rem;transition:.15s;display:inline-flex;align-items:center;gap:.5rem}
+    .btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.15)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .btn-primary{background:var(--primary);color:#fff}.btn-secondary{background:var(--secondary);color:#fff}
+    .btn-success{background:var(--success);color:#fff}.btn-info{background:var(--info);color:#fff}
+    .btn-outline{background:transparent;color:var(--primary);border:1px solid var(--border)}
+    .code-badge{display:inline-block;background:#eef2ff;color:var(--accent);border:1px solid #c7d2fe;border-radius:20px;padding:.35rem .85rem;margin:.2rem;font-size:.8125rem;font-weight:500}
+    .code-badge.behavioral{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+    .code-badge.clinical{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+    .code-badge.selected{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .code-snippet{background:#f8f9fa;border:1px solid var(--border);border-radius:8px;padding:1rem;font-family:'Courier New',monospace;font-size:.9rem;white-space:pre-wrap;line-height:1.5}
+    .result-item{background:#fff;border:1px solid var(--border);border-radius:8px;padding:1rem;margin-bottom:.75rem;transition:.2s}
+    .result-item:hover{box-shadow:0 2px 4px rgba(0,0,0,.1)}
+    .metric-card{background:linear-gradient(135deg,#f3f4f6,#fff);border:1px solid var(--border);border-radius:10px;padding:1.25rem;text-align:center}
+    .metric-value{font-size:2rem;font-weight:700;color:var(--primary)}.metric-label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:.25rem}
+    .alert{padding:1rem;border-radius:8px;margin:1rem 0;font-size:.875rem}
+    .alert-warning{background:#fef3c7;border:1px solid #fcd34d;color:#92400e}
+    .alert-info{background:#dbeafe;border:1px solid #60a5fa;color:#1e40af}
+    .alert-success{background:#d1fae5;border:1px solid #6ee7b7;color:#065f46}
+    .alert-error{background:#fee2e2;border:1px solid #fca5a5;color:#991b1b}
+    .help-text{font-size:.8125rem;color:var(--muted);margin-top:.25rem}
+    .footer{background:var(--primary);color:#fff;text-align:center;padding:2rem;margin-top:3rem;font-size:.875rem}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>Case Management System</h1>
+    <div class="subtitle">Barrier Documentation • ICD-10 Detection • AI Clinical Notes • Support Letters</div>
+    <nav class="nav">
+      <a class="nav-link" href="index.html">Home</a>
+      <a class="nav-link" href="dashboard.html">Dashboard</a>
+      <a class="nav-link active" href="casemanagementtool.html">Case Mgmt</a>
+      <a class="nav-link" href="oud.html">OUD Pathway</a>
+    </nav>
+  </header>
+
+  <div class="status-banner">🔐 Demo Mode: All PHI is redacted before processing. AI-powered note generation available.</div>
+
+  <main class="container">
+    <div class="card">
+      <h2>📝 Enter Barrier Information</h2>
+      <div class="grid">
+        <div>
+          <div class="form-group">
+            <label for="barrierNote">Barrier Note</label>
+            <textarea id="barrierNote" placeholder="Example: Client experiencing transportation barriers due to Access-A-Ride delays. Recent eviction led to shelter placement. Food runs out by week 3. Missed appointments due to lack of childcare."></textarea>
+        <div class="form-group" style="margin-top:.5rem;display:flex;gap:.5rem;align-items:center;">
+          <button id="barrierNoteMicBtn" class="btn" type="button" style="background:#2563eb;color:#fff">
+            🎙️ Hold to dictate (Barrier Note)
+          </button>
+          <span id="sttStatus" class="help-text">paused</span>
+        </div>
+        
+            <div class="help-text">Enter detailed barriers — PHI will be automatically redacted.</div>
+          </div>
+          <div class="form-group">
+            <label for="clientZip">ZIP Code (Optional)</label>
+            <input id="clientZip" type="text" maxlength="5" placeholder="10001"/>
+          </div>
+        </div>
+
+        <div>
+          <div class="form-group">
+            <label>Quick Tags</label>
+            <div class="checkbox-group">
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="transportation"/> 🚌 Transportation</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="food"/> 🥘 Food Security</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="housing"/> 🏠 Housing</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="employment"/> 💼 Employment</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="financial"/> 💰 Financial</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="medical"/> 🏥 Medical</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="substance"/> 💊 Substance Use</label>
+              <label class="checkbox-label"><input class="tag-checkbox" type="checkbox" value="mental"/> 🧠 Mental Health</label>
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="form-group">
+              <label for="noteTemplate">Clinical Note Format</label>
+              <select id="noteTemplate">
+                <option value="dap">DAP (Data/Assessment/Plan)</option>
+                <option value="soap">SOAP (Subjective/Objective/Assessment/Plan)</option>
+                <option value="girp">GIRP (Goal/Intervention/Response/Plan)</option>
+              </select>
+              <!-- APSO toggle (Assessment/Plan first for SOAP display) -->
+              <label class="checkbox-label" style="margin-top:.5rem;">
+                <input type="checkbox" id="apsoToggle"> Show SOAP as APSO (Assessment/Plan first)
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="letterType">Support Letter Type</label>
+              <select id="letterType">
+                <option value="general">General Support</option>
+                <option value="snap">SNAP/Food Benefits</option>
+                <option value="housing">Housing/Shelter</option>
+                <option value="utility">Utility Assistance</option>
+                <option value="medicaid">Medicaid Appeal</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button id="analyzeBtn" class="btn btn-primary">🔍 Analyze & Detect Codes</button>
+        <button id="generateNoteBtn" class="btn btn-info" disabled>🧠 Generate AI Clinical Note</button>
+        <button id="generateLetterBtn" class="btn btn-secondary" disabled>✉️ Generate Support Letter</button>
+        <button id="resetBtn" class="btn btn-outline">↺ Reset All</button>
+      </div>
+
+      <div id="statusMessages"></div>
+    </div>
+
+    <div id="metricsSection" class="hidden">
+      <div class="grid-3">
+        <div class="metric-card"><div id="totalCodes" class="metric-value">0</div><div class="metric-label">ICD-10 Codes Found</div></div>
+        <div class="metric-card"><div id="phiCount" class="metric-value">0</div><div class="metric-label">PHI Elements Redacted</div></div>
+        <div class="metric-card"><div id="processTime" class="metric-value">0ms</div><div class="metric-label">Processing Time</div></div>
+      </div>
+    </div>
+
+    <div id="resultsSection" class="hidden">
+      <div class="grid">
+        <div class="card">
+          <h3>🎯 Detected ICD-10 Codes</h3>
+          <div id="detectedCodesContainer"></div>
+
+          <h3>✅ Selected for Documentation</h3>
+          <div id="selectedCodesContainer"></div>
+        </div>
+
+        <div class="card">
+          <h3>🔒 Redacted Text</h3>
+          <div id="redactedTextBox" class="code-snippet"></div>
+
+          <h3>📋 Documentation Snippet</h3>
+          <div id="documentationSnippet" class="code-snippet"></div>
+          <button class="btn btn-outline" onclick="app.copySnippet()">Copy Snippet</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="clinicalNoteSection" class="card hidden">
+      <h3>📄 Clinical Note – <span id="noteFormatLabel">DAP</span> Format <span id="aiIndicator"></span></h3>
+      <div id="clinicalNoteContent" class="code-snippet"></div>
+      <div class="button-group">
+        <button class="btn btn-outline" onclick="app.copyClinicalNote()">Copy Note</button>
+        <button class="btn btn-success" onclick="app.downloadClinicalNote()">Download as Word</button>
+      </div>
+    </div>
+
+    <div id="letterSection" class="card hidden">
+      <h3>✉️ Support Letter</h3>
+      <div id="letterContent" class="code-snippet"></div>
+      <div class="button-group">
+        <button class="btn btn-outline" onclick="app.copyLetter()">Copy Letter</button>
+        <button class="btn btn-success" onclick="app.downloadLetter()">Download as Word</button>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <p><strong>Disclaimer:</strong> This is a demonstration tool. All outputs require professional review. Validate ICD-10 codes clinically. Protect PHI per HIPAA. 42 CFR Part 2 applies to SUD information.</p>
+    <p>© 2025 BH Navigator Demo</p>
+  </footer>
+
+  
+  <!-- Azure Speech SDK -->
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
+  <script>
+    // Speech-to-Text (push‑to‑talk) for Barrier Note
+    (function(){
+      const waitForSDK = () => new Promise(res => {
+        if (window.SpeechSDK) return res();
+        const iv = setInterval(()=>{ if(window.SpeechSDK){ clearInterval(iv); res(); } },50);
+      });
+      let recognizer = null;
+      let isDown = false;
+      let tokenPayload = null;
+      const statusEl = () => document.getElementById('sttStatus');
+      const noteEl = () => document.getElementById('barrierNote');
+      const btnEl = () => document.getElementById('barrierNoteMicBtn');
+
+      async function getToken(){
+        // cache for a few minutes
+        if(tokenPayload && tokenPayload.expiresAt && Date.now() < tokenPayload.expiresAt - 60*1000) return tokenPayload;
+        try{
+          const r = await fetch('/.netlify/functions/speech-token', { method:'POST' });
+          const j = await r.json();
+          tokenPayload = { token:j.token, region:j.region, endpointId:j.endpointId, expiresAt: Date.now()+ j.expiresIn*1000 };
+          return tokenPayload;
+        }catch(e){
+          console.error('STT token fetch failed', e);
+          throw e;
+        }
+      }
+
+      function appendText(text){
+        const el = noteEl();
+        const sep = el.value && !el.value.endsWith(' ') ? ' ' : '';
+        el.value = (el.value || '') + sep + text;
+      }
+
+      async function start(){
+        isDown = true;
+        statusEl().textContent='listening…';
+        await waitForSDK();
+        const creds = await getToken();
+        const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(creds.token, creds.region);
+        if (creds.endpointId) speechConfig.endpointId = creds.endpointId;
+        speechConfig.speechRecognitionLanguage = 'en-US';
+        const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+        recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+        recognizer.recognizing = (s,e)=>{
+          if(!isDown) return;
+          // show partials in the textarea (non-committal preview in title attr)
+          statusEl().textContent = 'listening… (' + (e.result && e.result.text || '') + ')';
+        };
+        recognizer.recognized = (s,e)=>{
+          if(e.result && e.result.text){
+            appendText(e.result.text);
+          }
+        };
+        recognizer.sessionStopped = ()=>{
+          statusEl().textContent='paused';
+        };
+        recognizer.canceled = (s,e)=>{
+          console.warn('STT canceled', e);
+          statusEl().textContent='paused';
+        };
+        recognizer.startContinuousRecognitionAsync();
+      }
+
+      function stop(){
+        isDown = false;
+        if(recognizer){
+          recognizer.stopContinuousRecognitionAsync(()=>{
+            statusEl().textContent='paused';
+            recognizer.close(); recognizer=null;
+          }, ()=>{
+            statusEl().textContent='paused';
+            recognizer.close(); recognizer=null;
+          });
+        }else{
+          statusEl().textContent='paused';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', ()=>{
+        const b = btnEl();
+        if(!b) return;
+        const down = (e)=>{ e.preventDefault(); start(); };
+        const up = (e)=>{ e.preventDefault(); stop(); };
+        b.addEventListener('mousedown', down);
+        b.addEventListener('touchstart', down);
+        b.addEventListener('mouseup', up);
+        b.addEventListener('mouseleave', up);
+        b.addEventListener('touchend', up);
+      });
+    })();
+  </script>
+<script>
+    const app = {
+      currentAnalysis:null, processingStartTime:0,
+
+      // === Code registry & patterns (expanded) ===
+      codeRegistry:{
+        'Z59.00':{title:'Homelessness, unspecified',type:'sdoh',category:'Housing'},
+        'Z59.01':{title:'Sheltered homelessness',type:'sdoh',category:'Housing'},
+        'Z59.02':{title:'Unsheltered homelessness',type:'sdoh',category:'Housing'},
+        'Z59.1':{title:'Inadequate housing',type:'sdoh',category:'Housing'},
+        'Z59.12':{title:'Inadequate utilities',type:'sdoh',category:'Housing'},
+        'Z59.41':{title:'Food insecurity',type:'sdoh',category:'Food'},
+        'Z59.6':{title:'Low income',type:'sdoh',category:'Economic'},
+        'Z59.7':{title:'Insufficient social insurance and welfare support',type:'sdoh',category:'Economic'},
+        'Z59.82':{title:'Transportation insecurity',type:'sdoh',category:'Transportation'},
+        'Z59.86':{title:'Financial insecurity',type:'sdoh',category:'Economic'},
+        'Z59.87':{title:'Material hardship',type:'sdoh',category:'Economic'},
+        'Z59.89':{title:'Other problems related to housing/economic circumstances',type:'sdoh',category:'Housing/Economic'},
+        'Z60.2':{title:'Problems related to living alone',type:'sdoh',category:'Social'},
+        'Z60.4':{title:'Social exclusion and rejection',type:'sdoh',category:'Social'},
+        'Z91.19':{title:'Patient noncompliance with medical treatment',type:'sdoh',category:'Adherence'},
+        'Z91.120':{title:"Patient's intentional underdosing of medication due to financial hardship",type:'sdoh',category:'Adherence'},
+        'F10.20':{title:'Alcohol use disorder, moderate/severe',type:'behavioral',category:'Substance Use'},
+        'F11.20':{title:'Opioid use disorder, moderate/severe',type:'behavioral',category:'Substance Use'},
+        'F12.20':{title:'Cannabis use disorder, moderate/severe',type:'behavioral',category:'Substance Use'},
+        'F12.90':{title:'Cannabis use, unspecified, uncomplicated',type:'behavioral',category:'Substance Use'},
+        'F14.20':{title:'Cocaine use disorder, moderate/severe',type:'behavioral',category:'Substance Use'},
+        'F32.9':{title:'Major depressive disorder, single episode',type:'behavioral',category:'Mental Health'},
+        'F33.9':{title:'Major depressive disorder, recurrent',type:'behavioral',category:'Mental Health'},
+        'F41.1':{title:'Generalized anxiety disorder',type:'behavioral',category:'Mental Health'},
+        'F43.10':{title:'Post-traumatic stress disorder',type:'behavioral',category:'Mental Health'},
+        'E11.9':{title:'Type 2 diabetes mellitus',type:'clinical',category:'Endocrine'},
+        'I10':{title:'Essential hypertension',type:'clinical',category:'Cardiovascular'},
+        'J44.1':{title:'COPD with acute exacerbation',type:'clinical',category:'Respiratory'}
+      },
+
+      // Specific, prioritized mapping rules
+      mappingRules:[
+        // Housing & homelessness specificity
+        {patterns:/\b(shelter|evict|eviction|curfew|sheltered)\b/i,codes:['Z59.01'],confidence:95,category:'Housing'},
+        {patterns:/\b(unsheltered|street|encampment|living in car)\b/i,codes:['Z59.02'],confidence:95,category:'Housing'},
+        {patterns:/\b(homeless|no home|couch surf|unstable housing)\b/i,codes:['Z59.00'],confidence:92,category:'Housing'},
+        {patterns:/\b(inadequate housing|mold|leak|no heat|unsafe|infestation|broken)\b/i,codes:['Z59.1'],confidence:90,category:'Housing Conditions'},
+
+        // Utilities, material hardship, financial
+        {patterns:/\b(utility|electric|gas|water).*(shut ?off|disconnected|past ?due|arrears)\b/i,codes:['Z59.12','Z59.87'],confidence:93,category:'Utilities/Hardship'},
+        {patterns:/\b(low income|no income|poverty|cannot afford|financial hardship|no money)\b/i,codes:['Z59.6','Z59.86'],confidence:90,category:'Economic'},
+        {patterns:/\b(benefits|insurance|coverage).*(lapse|denied|insufficient)\b/i,codes:['Z59.7'],confidence:88,category:'Economic/Insurance'},
+
+        // Transportation & food
+        {patterns:/\b(bus|train|subway|metro|transit|transport|access.?a.?ride|uber|lyft|taxi|transportation)\b/i,codes:['Z59.82'],confidence:95,category:'Transportation'},
+        {patterns:/\b(food runs out|food insecur|hungry|pantry|snap|ebt|wic|no food|cannot afford food)\b/i,codes:['Z59.41'],confidence:92,category:'Food Security'},
+
+        // Adherence
+        {patterns:/\b(cannot afford|ran out of|stopped|skipping).*(medication|insulin|pills)\b/i,codes:['Z91.120'],confidence:92,category:'Adherence/Finance'},
+        {patterns:/\b(not taking|stopped|missed|ran out|non.?compliant|non.?adherent)\b/i,codes:['Z91.19'],confidence:91,category:'Medication Adherence'},
+
+        // Behavioral / mental health (guarded by negation later)
+        {patterns:/\b(alcohol|drinking|intoxicated|etoh|drunk)\b/i,codes:['F10.20'],confidence:92,category:'Alcohol Use'},
+        {patterns:/\b(opioid|heroin|fentanyl|pain pills|oxycodone)\b/i,codes:['F11.20'],confidence:94,category:'Opioid Use'},
+        {patterns:/\b(weed|cannabis|marijuana)\b/i,codes:['F12.90'],confidence:88,category:'Cannabis Use'},
+        {patterns:/\b(depress|sad|hopeless|crying|suicid)\b/i,codes:['F32.9','F33.9'],confidence:90,category:'Depression'},
+        {patterns:/\b(anxiety|panic|worry|nervous|anxious)\b/i,codes:['F41.1'],confidence:89,category:'Anxiety'},
+
+        // Clinical
+        {patterns:/\b(diabetes|glucose|blood sugar|insulin|a1c)\b/i,codes:['E11.9'],confidence:92,category:'Diabetes'},
+        {patterns:/\b(hypertension|high blood pressure|htn)\b/i,codes:['I10'],confidence:91,category:'Hypertension'}
+      ],
+
+      // === PHI redaction ===
+      redactPHI(text){
+        const redactions=[]; let t=text;
+        const patterns=[
+          {regex:/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g,type:'Name',ph:'[NAME]'},
+          {regex:/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g,type:'Phone',ph:'[PHONE]'},
+          {regex:/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g,type:'Email',ph:'[EMAIL]'},
+          {regex:/\b(0[1-9]|1[0-2])[\/\-](0[1-9]|[12]\d|3[01])[\/\-](\d{4}|\d{2})\b/g,type:'Date',ph:'[DATE]'},
+          {regex:/\b\d{1,5}\s+[A-Za-z]+\s+(Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lane|Ln|Way|Court|Ct|Place|Pl)\b/gi,type:'Address',ph:'[ADDRESS]'},
+          {regex:/\bMRN\s*#?\s*\d+\b/gi,type:'MRN',ph:'[MRN]'},
+          {regex:/\b\d{3}-\d{2}-\d{4}\b/g,type:'SSN',ph:'[SSN]'}
+        ];
+        patterns.forEach(p=>{
+          (t.match(p.regex)||[]).forEach(m=>{redactions.push({type:p.type,original:m}); t=t.replace(m,p.ph);});
+        });
+        return {redactedText:t,redactions};
+      },
+
+      // simple negation helper for sensitive keywords
+      negated(txt, kw){ return new RegExp(`\\b(denies|no|not|without)\\b[^.]{0,20}\\b${kw}\\b`,'i').test(txt) },
+
+      detectCodes(text,tags){
+        const blob=(text+' '+tags.join(' ')).toLowerCase();
+        const out=[], seen=new Set();
+
+        this.mappingRules.forEach(r=>{
+          if(r.patterns.test(blob)){
+            // Guard for obvious negations (SU / risk words)
+            const kwMatch = /(alcohol|opioid|cannabis|marijuana|suicid|homicid)/i.exec(String(r.patterns));
+            if (kwMatch && this.negated(blob, kwMatch[1])) return;
+
+            r.codes.forEach(code=>{
+              if(!seen.has(code) && this.codeRegistry[code]){
+                const info=this.codeRegistry[code];
+                out.push({
+                  code,
+                  title:info.title,
+                  type:info.type,
+                  category:r.category,
+                  confidence:r.confidence+(Math.random()*5-2.5)
+                });
+                seen.add(code);
+              }
+            });
+          }
+        });
+
+        // Prefer specific codes over generic; then by confidence
+        out.sort((a,b)=>{
+          const specA = a.code.length > 5 ? 1 : 0;
+          const specB = b.code.length > 5 ? 1 : 0;
+          if (specA !== specB) return specB - specA;
+          return b.confidence - a.confidence;
+        });
+
+        return out.slice(0,5);
+      },
+
+      analyze(){
+        this.processingStartTime=performance.now();
+        const note=document.getElementById('barrierNote').value.trim();
+        const tags=Array.from(document.querySelectorAll('.tag-checkbox:checked')).map(cb=>cb.value);
+        if(!note){ this.showMessage('Please enter a barrier note to analyze','warning'); return; }
+
+        const {redactedText,redactions}=this.redactPHI(note);
+        const codes=this.detectCodes(redactedText,tags);
+        if(codes.length===0){
+          codes.push({code:'Z65.8',title:'Other psychosocial circumstances',type:'sdoh',category:'General',confidence:70});
+        }
+        const processingTime=(performance.now()-this.processingStartTime).toFixed(1);
+        const codeList=codes.slice(0,5).map(c=>`${c.title} (${c.code})`).join(', ');
+        const snippet=`[CLIENT_NAME] presents with documented barriers affecting care continuity, including ${codeList}. Comprehensive support coordination is indicated to address these social determinants of health.`;
+
+        this.currentAnalysis={originalText:note,redactedText,redactions,codes,snippet,tags,processingTime};
+        this.displayResults();
+        document.getElementById('generateNoteBtn').disabled=false;
+        document.getElementById('generateLetterBtn').disabled=false;
+        this.showMessage('Analysis complete! PHI redacted and codes detected.','success');
+      },
+
+      displayResults(){
+        if(!this.currentAnalysis) return;
+        document.getElementById('metricsSection').classList.remove('hidden');
+        document.getElementById('resultsSection').classList.remove('hidden');
+        document.getElementById('totalCodes').textContent=this.currentAnalysis.codes.length;
+        document.getElementById('phiCount').textContent=this.currentAnalysis.redactions.length;
+        document.getElementById('processTime').textContent=this.currentAnalysis.processingTime+'ms';
+
+        const codesHtml=this.currentAnalysis.codes.map(c=>{
+          const cls=c.type==='behavioral'?'behavioral':(c.type==='clinical'?'clinical':'');
+          return `<div class="result-item"><span class="code-badge ${cls}">${c.code} - ${c.title}</span><div class="help-text">${c.category} • Confidence: ${Math.round(c.confidence)}%</div></div>`;
+        }).join('');
+        document.getElementById('detectedCodesContainer').innerHTML=codesHtml;
+
+        document.getElementById('selectedCodesContainer').innerHTML=this.currentAnalysis.codes.slice(0,5).map(c=>`<span class="code-badge selected">${c.code}</span>`).join('');
+        document.getElementById('redactedTextBox').textContent=this.currentAnalysis.redactedText;
+        document.getElementById('documentationSnippet').textContent=this.currentAnalysis.snippet;
+      },
+
+      // ---- AI INTEGRATION ----
+      normalizeSections(template, raw){
+        if(!raw || typeof raw!=='object') return {};
+        const lc={}; for(const [k,v] of Object.entries(raw)) lc[String(k).toLowerCase().trim()]=v;
+        const pick=(...keys)=>{ for(const k of keys){ if(lc[k]!=null && String(lc[k]).trim()) return String(lc[k]); } return ''; };
+        if(template==='dap')  return {data:pick('data','d','subjective'),assessment:pick('assessment','a','analysis'),plan:pick('plan','p','next steps','follow-up')};
+        if(template==='soap') return {subjective:pick('subjective','s','data'),objective:pick('objective','o'),assessment:pick('assessment','a','analysis'),plan:pick('plan','p','next steps','follow-up')};
+        if(template==='girp') return {goal:pick('goal','goals','g'),intervention:pick('intervention','interventions','i','actions'),response:pick('response','client response','r','outcome'),plan:pick('plan','p','next steps','follow-up')};
+        return {};
+      },
+
+      async generateClinicalNote(){
+        if(!this.currentAnalysis){ this.showMessage('Please analyze the note first','warning'); return; }
+        const template=document.getElementById('noteTemplate').value;
+        const btn=document.getElementById('generateNoteBtn'); if(btn) btn.disabled=true;
+        this.showMessage('🧠 Generating AI-powered clinical note...','info');
+
+        try{
+          const res=await fetch('/.netlify/functions/generate-note',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({
+              template, 
+              redacted_text:this.currentAnalysis.redactedText, 
+              codes:this.currentAnalysis.codes, 
+              tags:this.currentAnalysis.tags
+            })
+          });
+          if(!res.ok){
+            const err=await res.json().catch(()=>({}));
+            throw new Error(err.error || `API error: ${res.status}`);
+          }
+          const data=await res.json();
+          if(!data.sections) throw new Error('Invalid response format');
+
+          const sections=this.normalizeSections(template,data.sections);
+          this.displayClinicalNote(sections,template,true);
+          this.showMessage('✅ AI-powered clinical note generated successfully!','success');
+        }catch(e){
+          console.error('AI generation failed:',e);
+          this.showMessage(`⚠️ AI unavailable (${e.message}). Using local generation.`,'warning');
+          const fallback=this.createLocalNote(template);
+          this.displayClinicalNote(fallback,template,false);
+        }finally{
+          const b=document.getElementById('generateNoteBtn'); 
+          if(b) b.disabled=false;
+        }
+      },
+
+      createLocalNote(template){
+        const codes=this.currentAnalysis.codes.slice(0,5);
+        const codeList=codes.map(c=>`${c.title} (${c.code})`).join(', ');
+        const notes={
+          dap:{data:`Client reports: ${this.currentAnalysis.redactedText.slice(0,200)}...\n\nIdentified ICD-10 codes: ${codeList}\n\nInterventions: Brief counseling, resource navigation, barrier assessment completed.`,
+               assessment:`Client demonstrates insight into barriers. Primary concerns: ${codes[0]?.title||'social determinants'}. Multiple concurrent barriers present. Risk: Moderate. Prognosis: Fair with support.`,
+               plan:`1. Weekly sessions\n2. Coordinate resources\n3. Follow up on referrals (7 days)\n4. Monitor resolution\n5. Case conference if needed`},
+          soap:{subjective:this.currentAnalysis.redactedText,
+                objective:`Alert, oriented, cooperative. Barriers documented: ${codeList}.`,
+                assessment:`Multiple SDOH affecting outcomes. ${codes[0]?.title||'Barriers'} primary concern.`,
+                plan:`Continue plan, referrals initiated, follow-up [DATE].`},
+          girp:{goal:`Reduce barriers to care access within 30 days; improve adherence.`,
+                intervention:`Barrier assessment conducted. ${codes.length} ICD-10 codes identified. Psychoeducation and referrals initiated.`,
+                response:`Client engaged; verbalized understanding; agrees to follow-up actions.`,
+                plan:`Monitor progress, follow referrals, reassess in 2 weeks.`}
+        };
+        return notes[template]||notes.dap;
+      },
+
+      displayClinicalNote(note, template, isAI=false){
+        document.getElementById('clinicalNoteSection').classList.remove('hidden');
+        document.getElementById('noteFormatLabel').textContent=template.toUpperCase();
+        const ai=document.getElementById('aiIndicator');
+        ai.textContent=isAI?'(AI Generated)':'(Local Template)';
+        ai.style.color=isAI?'var(--success)':'var(--muted)';
+
+        const apso=document.getElementById('apsoToggle')?.checked;
+        let content=`Client: [CLIENT_NAME]\nDOB: [DOB]\nDate: [DATE]\nTime: [START_TIME] - [END_TIME]\nLocation: [LOCATION]\n\n`;
+
+        if(template==='soap' && apso){
+          // APSO (Assessment/Plan first)
+          content+=`ASSESSMENT:\n${note.assessment||''}\n\nPLAN:\n${note.plan||''}\n\nSUBJECTIVE:\n${note.subjective||''}\n\nOBJECTIVE:\n${note.objective||''}`;
+        } else if(template==='soap'){
+          // Standard SOAP
+          content+=`SUBJECTIVE:\n${note.subjective||''}\n\nOBJECTIVE:\n${note.objective||''}\n\nASSESSMENT:\n${note.assessment||''}\n\nPLAN:\n${note.plan||''}`;
+        } else if(template==='dap'){
+          content+=`DATA:\n${note.data||''}\n\nASSESSMENT:\n${note.assessment||''}\n\nPLAN:\n${note.plan||''}`;
+        } else if(template==='girp'){
+          content+=`GOAL:\n${note.goal||''}\n\nINTERVENTION:\n${note.intervention||''}\n\nRESPONSE:\n${note.response||''}\n\nPLAN:\n${note.plan||''}`;
+        }
+
+        document.getElementById('clinicalNoteContent').textContent=content;
+        this.currentAnalysis.clinicalNote=content;
+      },
+
+      // ---- Letter generation ----
+      generateLetter(){
+        if(!this.currentAnalysis){ this.showMessage('Please analyze the note first','warning'); return; }
+        const type=document.getElementById('letterType').value;
+        const codes=this.currentAnalysis.codes.slice(0,5);
+        const templates={
+          general:cs=>`[DATE]\n\nTo Whom It May Concern,\n\nRE: Support Services Request for [CLIENT_NAME]\n\nWe are providing case management for [CLIENT_NAME] through [AGENCY_NAME]. Our assessment identified barriers affecting care access:\n\n${cs.map(c=>`• ${c.code} - ${c.title}`).join('\n')}\n\nWe request your assistance addressing these barriers.\n\nContact: [AGENCY_PHONE] or [AGENCY_EMAIL]\n\nSincerely,\n[STAFF_NAME]\n[AGENCY_NAME]`,
+          snap:cs=>`[DATE]\n\nSNAP Benefits Team\n\nRE: SNAP Benefits - [CLIENT_NAME]\n\nWe support [CLIENT_NAME] experiencing documented food insecurity:\n\n${cs.filter(c=>c.category==='Food Security').map(c=>`• ${c.code} - ${c.title}`).join('\n')||'• Z59.41 - Food insecurity'}\n\nExpedited processing requested.\n\nContact: [AGENCY_PHONE]\n\n[STAFF_NAME]\n[AGENCY_NAME]`,
+          housing:cs=>`[DATE]\n\nHousing Services\n\nRE: Housing Request - [CLIENT_NAME]\n\nDocumented housing barriers:\n\n${cs.filter(c=>c.category==='Housing'||c.code.startsWith('Z59.0')).map(c=>`• ${c.code} - ${c.title}`).join('\n')||'• Z59.00 - Homelessness'}\n\nImmediate placement needed.\n\nContact: [AGENCY_PHONE]\n\n[STAFF_NAME]\n[AGENCY_NAME]`,
+          utility:cs=>`[DATE]\n\nUtility Assistance\n\nRE: Hardship Request - [CLIENT_NAME]\n\nMaterial/utility hardship documented:\n\n${cs.filter(c=>['Z59.12','Z59.87','Z59.86'].includes(c.code)).map(c=>`• ${c.code} - ${c.title}`).join('\n')||'• Z59.87 - Material hardship'}\n\nPrevent service interruption.\n\n[STAFF_NAME]\n[AGENCY_NAME]`,
+          medicaid:cs=>`[DATE]\n\nMedicaid Appeals\n\nRE: Appeal Support - [CLIENT_NAME]\n\nBarriers affecting care:\n\n${cs.map(c=>`• ${c.code} - ${c.title}`).join('\n')}\n\nReconsideration requested.\n\n[STAFF_NAME]\n[AGENCY_NAME]`
+        };
+        const letter=(templates[type]||templates.general)(codes);
+        document.getElementById('letterSection').classList.remove('hidden');
+        document.getElementById('letterContent').textContent=letter;
+        this.currentAnalysis.letter=letter;
+        this.showMessage('Support letter generated!','success');
+      },
+
+      // ---- Utilities ----
+      showMessage(msg,type='info'){
+        document.getElementById('statusMessages').innerHTML=`<div class="alert alert-${type}">${msg}</div>`;
+        setTimeout(()=>{document.getElementById('statusMessages').innerHTML='';},5000);
+      },
+      copyToClipboard(txt,label){navigator.clipboard.writeText(txt).then(()=>this.showMessage(`${label} copied to clipboard`,'success')).catch(()=>this.showMessage(`Failed to copy ${label}`,'error'))},
+      copySnippet(){if(this.currentAnalysis?.snippet)this.copyToClipboard(this.currentAnalysis.snippet,'Documentation snippet')},
+      copyClinicalNote(){if(this.currentAnalysis?.clinicalNote)this.copyToClipboard(this.currentAnalysis.clinicalNote,'Clinical note')},
+      copyLetter(){if(this.currentAnalysis?.letter)this.copyToClipboard(this.currentAnalysis.letter,'Support letter')},
+      downloadAsWord(content,filename){
+        const html=`<html><head><meta charset='utf-8'></head><body style='font-family:Arial;font-size:12pt;line-height:1.6;'>${content.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('')}</body></html>`;
+        const blob=new Blob(['\ufeff',html],{type:'application/msword'}); const url=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=url; a.download=`${filename}_${new Date().toISOString().slice(0,10)}.doc`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+      },
+      downloadClinicalNote(){if(this.currentAnalysis?.clinicalNote)this.downloadAsWord(this.currentAnalysis.clinicalNote,'clinical_note')},
+      downloadLetter(){if(this.currentAnalysis?.letter)this.downloadAsWord(this.currentAnalysis.letter,'support_letter')},
+      reset(){
+        document.getElementById('barrierNote').value=''; document.getElementById('clientZip').value='';
+        document.querySelectorAll('.tag-checkbox').forEach(cb=>cb.checked=false);
+        document.getElementById('noteTemplate').value='dap'; document.getElementById('apsoToggle').checked=false;
+        document.getElementById('letterType').value='general';
+        document.getElementById('metricsSection').classList.add('hidden'); document.getElementById('resultsSection').classList.add('hidden');
+        document.getElementById('clinicalNoteSection').classList.add('hidden'); document.getElementById('letterSection').classList.add('hidden');
+        document.getElementById('statusMessages').innerHTML=''; document.getElementById('generateNoteBtn').disabled=true; document.getElementById('generateLetterBtn').disabled=true;
+        this.currentAnalysis=null; this.showMessage('Form reset successfully','info');
+      }
+    };
+
+    document.addEventListener('DOMContentLoaded',()=>{
+      document.getElementById('analyzeBtn').addEventListener('click',()=>app.analyze());
+      document.getElementById('generateNoteBtn').addEventListener('click',()=>app.generateClinicalNote());
+      document.getElementById('generateLetterBtn').addEventListener('click',()=>app.generateLetter());
+      document.getElementById('resetBtn').addEventListener('click',()=>app.reset());
+    });
+  </script>
+</body>
+</html>

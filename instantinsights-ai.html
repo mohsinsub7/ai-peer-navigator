@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Instant Insights — AI</title>
+   <script src="auth-check.js"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+  <style>
+    :root{ --bg:#0f172a; --card:#0b1424; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; }
+    *{box-sizing:border-box}
+    body{ margin:0; background:linear-gradient(180deg,#0b1220 0%, #0f172a 50%, #0b1220 100%);
+          color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto }
+    header{ position:sticky; top:0; z-index:10; background:rgba(15,23,42,.85); backdrop-filter: blur(8px);
+            border-bottom:1px solid rgba(148,163,184,.2) }
+    .wrap{ max-width:1200px; margin:0 auto; padding:16px 20px }
+    .flex{ display:flex; align-items:center; gap:12px }
+    .title{ font-weight:800; font-size:20px }
+    .sub{ font-size:12px; color:var(--muted) }
+    .btn{ appearance:none; border:1px solid rgba(148,163,184,.25); background:#091120; color:var(--text);
+          padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600 }
+    .btn:hover{ border-color:var(--accent) }
+    main .wrap{ padding-top:22px }
+    .card{ background:radial-gradient(800px 140px at 20% -15%, rgba(56,189,248,.10), transparent 50%), #0b1424;
+           border:1px solid rgba(148,163,184,.22); border-radius:16px; padding:16px }
+    .grid{ display:grid; gap:16px }
+    .grid.kpi{ grid-template-columns:repeat(4,minmax(0,1fr)) }
+    .grid.charts{ grid-template-columns:repeat(2,minmax(0,1fr)) }
+    @media (max-width:1000px){ .grid.kpi{grid-template-columns:repeat(2,1fr)} .grid.charts{grid-template-columns:1fr} }
+    .drop{ display:grid; place-items:center; height:170px; border:2px dashed rgba(148,163,184,.35); border-radius:14px }
+    .drop.dragover{ border-color:var(--accent) }
+    .muted{ color:var(--muted) }
+    .kpi{ padding:14px; border-radius:12px; border:1px solid rgba(148,163,184,.2); background:#0b162a }
+    .kpi .label{ font-size:12px; color:var(--muted) }
+    .kpi .value{ font-size:24px; font-weight:800; margin-top:6px }
+    .chart{ height:340px; border:1px solid rgba(148,163,184,.15); border-radius:12px; background:#0b162a; padding:8px }
+    .insights li{ margin:8px 0 }
+    .hidden{ display:none }
+    .toast{ position:fixed; right:16px; bottom:16px; padding:10px 14px; background:#081018; border:1px solid rgba(148,163,184,.3); border-radius:12px }
+    .loading-spinner{ width:48px; height:48px; border:4px solid rgba(56,189,248,.2); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="flex">
+        <div>
+          <div class="title">Instant Insights — AI (Freeform)</div>
+          <div class="sub">Upload any CSV/Excel → Server-side AI designs the dashboard it chooses</div>
+        </div>
+        <div style="flex:1"></div>
+        <button class="btn" id="btn-sample">Load Sample</button>
+        <label class="btn" for="file-input">Upload</label>
+        <input id="file-input" type="file" accept=".csv,.xlsx,.xls" style="display:none"/>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap grid">
+      <div id="dropzone" class="card drop">
+        <div>
+          <div style="font-weight:700; font-size:18px; text-align:center">Drag & drop CSV/Excel here</div>
+          <div class="muted" style="text-align:center; margin-top:6px">or click “Upload”</div>
+        </div>
+      </div>
+
+      <section id="profile-section" class="card">
+        <h3>Data Profile</h3>
+        <div id="profile-content" class="muted">No data yet.</div>
+      </section>
+
+      <section id="loading-section" class="card hidden" style="text-align:center; padding:40px;">
+        <div class="loading-spinner"></div>
+        <div id="loading-text" style="margin-top:16px; font-size:16px; font-weight:600;">🧠 Analyzing data...</div>
+        <div class="muted" style="margin-top:8px; font-size:14px;">This may take 10-30 seconds</div>
+      </section>
+
+      <section id="kpi-section" class="card hidden">
+        <h3 id="dash-title">Dashboard</h3>
+        <div id="kpi-grid" class="grid kpi"></div>
+      </section>
+
+      <section id="charts-section" class="card hidden">
+        <h3>Visuals</h3>
+        <div id="chart-grid" class="grid charts"></div>
+      </section>
+
+      <section id="insights-section" class="card hidden">
+        <h3>Insights</h3>
+        <ul id="insights-list" class="insights"></ul>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.0/dist/xlsx.full.min.js"></script>
+  <script type="module" src="./instantinsights-ai.js"></script>
+</body>
+</html>

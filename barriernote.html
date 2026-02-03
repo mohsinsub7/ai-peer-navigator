@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Barrier Note → Z-Code & Letter Writer</title>
+  <script src="auth-check.js"></script>
+  <style>
+    :root {
+      --primary: #0f172a;
+      --secondary: #1e293b;
+      --accent: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --bg: #f6f7fb;
+      --card: #fff;
+      --border: #e5e7eb;
+      --text: #111;
+      --muted: #64748b;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .header h1 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .subtitle {
+      opacity: 0.9;
+      font-size: 0.9rem;
+    }
+    
+    .nav {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    
+    .nav-link {
+      background: rgba(255,255,255,0.1);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      border: 1px solid rgba(255,255,255,0.2);
+      transition: all 0.2s;
+    }
+    
+    .nav-link:hover,
+    .nav-link.active {
+      background: white;
+      color: var(--primary);
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    
+    @media (max-width: 768px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    
+    h2 {
+      font-size: 1.25rem;
+      margin-bottom: 1rem;
+      color: var(--primary);
+    }
+    
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      color: var(--secondary);
+    }
+    
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      color: var(--secondary);
+    }
+    
+    textarea,
+    select,
+    input {
+      width: 100%;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      background: white;
+    }
+    
+    textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+    
+    .checkbox-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      padding: 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    .checkbox-label:hover {
+      background: var(--bg);
+    }
+    
+    .checkbox-label input {
+      width: auto;
+      margin-right: 0.5rem;
+    }
+    
+    .btn {
+      padding: 0.625rem 1.25rem;
+      border: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      margin-right: 0.5rem;
+      margin-bottom: 0.5rem;
+      transition: all 0.2s;
+    }
+    
+    .btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    
+    .btn-secondary {
+      background: var(--secondary);
+      color: white;
+    }
+    
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+    
+    .btn-ghost {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    
+    .code-pill {
+      display: inline-block;
+      background: #eef2ff;
+      color: var(--accent);
+      border: 1px solid #c7d2fe;
+      border-radius: 999px;
+      padding: 0.25rem 0.75rem;
+      margin: 0.25rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    
+    .code-item {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    
+    .code-item .rationale {
+      font-size: 0.875rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    
+    .snippet-box {
+      background: #f8f9fa;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      margin-bottom: 1rem;
+    }
+    
+    .letter-box {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      font-family: 'Times New Roman', serif;
+      white-space: pre-wrap;
+      line-height: 1.8;
+    }
+    
+    .warning-box {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    
+    .info-box {
+      background: #dbeafe;
+      border: 1px solid #60a5fa;
+      color: #1e40af;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+    
+    .footer {
+      background: var(--primary);
+      color: white;
+      text-align: center;
+      padding: 2rem;
+      margin-top: 3rem;
+      font-size: 0.875rem;
+    }
+    
+    .help-text {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-top: 0.25rem;
+    }
+    
+    .metric-card {
+      background: linear-gradient(135deg, #f3f4f6, #fff);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      text-align: center;
+    }
+    
+    .metric-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--primary);
+    }
+    
+    .metric-label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-top: 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>Barrier Documentation System</h1>
+    <div class="subtitle">Transform barrier notes into ICD-10 codes and support letters</div>
+    <nav class="nav">
+      <a href="#" class="nav-link">Home</a>
+      <a href="#" class="nav-link">Dashboard</a>
+      <a href="#" class="nav-link active">Barrier Tool</a>
+      <a href="#" class="nav-link">OUD Pathway</a>
+    </nav>
+  </header>
+
+  <div class="container">
+    <div class="card">
+      <h2>📝 Enter Barrier Information</h2>
+      <div class="grid">
+        <div>
+          <label for="noteInput">Barrier Note</label>
+          <textarea id="noteInput" placeholder="Example: Client missed two morning appointments because the first bus arrives after 8:15 and rideshare is unaffordable. Works evening shifts and trying to keep follow-up visits."></textarea>
+          <div class="help-text">Be specific about barriers and their impact on care</div>
+          
+          <label for="zipInput" style="margin-top: 1rem;">ZIP Code (Optional)</label>
+          <input type="text" id="zipInput" maxlength="5" placeholder="10001">
+        </div>
+        
+        <div>
+          <label>Quick Tags (Optional)</label>
+          <div class="checkbox-group">
+            <label class="checkbox-label">
+              <input type="checkbox" value="transportation"> Transportation
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="food"> Food Security
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="housing"> Housing
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="utilities"> Utilities
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="employment"> Employment
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="financial"> Financial
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="isolation"> Isolation
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" value="education"> Education
+            </label>
+          </div>
+          
+          <div class="grid" style="margin-top: 1rem;">
+            <div>
+              <label for="letterType">Letter Type</label>
+              <select id="letterType">
+                <option value="general">General Support</option>
+                <option value="snap">SNAP/Food Benefits</option>
+                <option value="utility">Utility Hardship</option>
+                <option value="housing">Housing/Shelter</option>
+                <option value="employer">Employer/School</option>
+              </select>
+            </div>
+            <div>
+              <label for="language">Language</label>
+              <select id="language">
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style="margin-top: 1rem;">
+        <button class="btn btn-primary" onclick="generateAnalysis()">🔍 Generate Analysis</button>
+        <button class="btn btn-ghost" onclick="copyJSON()">📋 Copy JSON</button>
+        <button class="btn btn-ghost" onclick="resetForm()">🔄 Reset</button>
+      </div>
+      
+      <div id="warnings"></div>
+    </div>
+
+    <div id="metricsSection" style="display: none;">
+      <div class="grid" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="metric-card">
+          <div class="metric-value" id="metricCodes">0</div>
+          <div class="metric-label">Codes Identified</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" id="metricConfidence">0%</div>
+          <div class="metric-label">Avg Confidence</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value" id="metricTime">0ms</div>
+          <div class="metric-label">Processing Time</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="resultsSection" class="grid" style="display: none; margin-top: 1.5rem;">
+      <div class="card">
+        <h3>🎯 Suggested ICD-10 Codes</h3>
+        <div id="candidatesContainer"></div>
+        
+        <h3 style="margin-top: 1rem;">✅ Selected Codes</h3>
+        <div id="selectedContainer"></div>
+      </div>
+      
+      <div class="card">
+        <h3>📄 Documentation Snippet</h3>
+        <div id="snippetBox" class="snippet-box"></div>
+        <button class="btn btn-ghost" onclick="copySnippet()">Copy Snippet</button>
+        
+        <h3 style="margin-top: 1rem;">✉️ Support Letter Preview</h3>
+        <div id="letterPreview" class="letter-box"></div>
+        <button class="btn btn-ghost" onclick="copyLetter()">Copy Letter</button>
+        <button class="btn btn-success" onclick="downloadLetter()">Download as .txt</button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <strong>Disclaimer:</strong> This tool is for documentation support only. All outputs require professional review. 
+    Validate ICD-10 codes clinically. Protect PHI. 42 CFR Part 2 applies to SUD information.
+  </footer>
+
+  <script>
+    // Code registry and rules
+    const CODE_REGISTRY = {
+      'Z59.82': { title: 'Transportation insecurity', category: 'Transportation' },
+      'Z59.41': { title: 'Food insecurity', category: 'Food' },
+      'Z59.00': { title: 'Homelessness, unspecified', category: 'Housing' },
+      'Z59.01': { title: 'Sheltered homelessness', category: 'Housing' },
+      'Z59.02': { title: 'Unsheltered homelessness', category: 'Housing' },
+      'Z59.1': { title: 'Inadequate housing', category: 'Housing' },
+      'Z59.6': { title: 'Low income', category: 'Economic' },
+      'Z59.87': { title: 'Material hardship', category: 'Economic' },
+      'Z60.2': { title: 'Problems related to living alone', category: 'Social' },
+      'Z60.3': { title: 'Acculturation difficulty', category: 'Social' },
+      'Z60.4': { title: 'Social exclusion and rejection', category: 'Social' },
+      'Z55.0': { title: 'Illiteracy and low-level literacy', category: 'Education' },
+      'Z56.0': { title: 'Unemployment', category: 'Employment' },
+      'Z56.3': { title: 'Stressful work schedule', category: 'Employment' },
+      'Z65.8': { title: 'Other psychosocial circumstances', category: 'Psychosocial' }
+    };
+
+    const MAPPING_RULES = [
+      {
+        patterns: /\b(bus|train|subway|metro|transit|transport|commute|ride|uber|lyft|taxi|access.?a.?ride|medical transport|no car|can't get to|unable to travel)\b/i,
+        codes: ['Z59.82'],
+        rationale: 'Transportation barriers identified'
+      },
+      {
+        patterns: /\b(food runs out|food insecur|hungry|pantry|food bank|snap|ebt|wic|skip meals|no food|can't afford food)\b/i,
+        codes: ['Z59.41'],
+        rationale: 'Food insecurity documented'
+      },
+      {
+        patterns: /\b(homeless|no home|shelter|street|evict|eviction|couch surf|living in car|no address|unstable housing)\b/i,
+        codes: ['Z59.00', 'Z59.01', 'Z59.02'],
+        rationale: 'Housing instability or homelessness'
+      },
+      {
+        patterns: /\b(mold|leak|no heat|no hot water|unsafe|roach|rat|mice|bedbug|infestation|broken)\b/i,
+        codes: ['Z59.1'],
+        rationale: 'Inadequate housing conditions'
+      },
+      {
+        patterns: /\b(utility|shut off|electric|gas bill|water bill|past due|cannot pay)\b/i,
+        codes: ['Z59.87'],
+        rationale: 'Utility hardship'
+      },
+      {
+        patterns: /\b(low income|no income|poverty|cannot afford|no money|financial|economic hardship)\b/i,
+        codes: ['Z59.6'],
+        rationale: 'Financial hardship'
+      },
+      {
+        patterns: /\b(unemployed|no job|lost job|laid off|fired|terminated|job loss)\b/i,
+        codes: ['Z56.0'],
+        rationale: 'Unemployment'
+      },
+      {
+        patterns: /\b(shift work|evening shift|night shift|multiple jobs|work schedule)\b/i,
+        codes: ['Z56.3'],
+        rationale: 'Stressful work schedule'
+      },
+      {
+        patterns: /\b(alone|isolated|no support|no family|lonely|isolation)\b/i,
+        codes: ['Z60.2'],
+        rationale: 'Social isolation'
+      },
+      {
+        patterns: /\b(cannot read|illiterate|literacy|forms|ESL|language barrier)\b/i,
+        codes: ['Z55.0'],
+        rationale: 'Literacy issues'
+      }
+    ];
+
+    const LETTER_TEMPLATES = {
+      en: {
+        general: (codes) => `[DATE]
+
+To Whom It May Concern,
+
+RE: Support Services Request for [CLIENT_NAME]
+
+We are providing case management services for [CLIENT_NAME] through [AGENCY_NAME]. Our assessment has identified significant barriers affecting their ability to access and maintain necessary care.
+
+The following ICD-10 codes have been documented:
+${codes.map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+These barriers significantly impact [CLIENT_NAME]'s ability to maintain appointments and follow treatment recommendations. We respectfully request your assistance in addressing these barriers to support their health and wellbeing.
+
+Please contact our office at [AGENCY_PHONE] or [AGENCY_EMAIL] for any additional information or coordination needs.
+
+Sincerely,
+
+[STAFF_NAME]
+[TITLE]
+[AGENCY_NAME]`,
+
+        snap: (codes) => `[DATE]
+
+SNAP/Benefits Review Team
+
+RE: SNAP Benefits Request for [CLIENT_NAME]
+
+We are supporting [CLIENT_NAME] who is experiencing documented food insecurity. This situation is affecting their nutritional status and ability to manage their health conditions.
+
+Relevant ICD-10 documentation:
+${codes.filter(c => c.code === 'Z59.41' || c.category === 'Food').map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+We request expedited consideration for SNAP benefits to address these documented needs.
+
+For verification or additional information, please contact [AGENCY_PHONE] or [AGENCY_EMAIL].
+
+Respectfully submitted,
+
+[STAFF_NAME]
+[AGENCY_NAME]`,
+
+        utility: (codes) => `[DATE]
+
+Customer Assistance/Hardship Program
+
+RE: Utility Assistance Request for [CLIENT_NAME]
+
+We are assisting [CLIENT_NAME] who is experiencing documented material hardship affecting their ability to maintain essential utilities.
+
+Documentation includes:
+${codes.filter(c => c.code === 'Z59.87' || c.code === 'Z59.6').map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+We request consideration for hardship assistance to prevent service interruption while we work to establish sustainable support.
+
+Please contact [AGENCY_PHONE] or [AGENCY_EMAIL] with questions.
+
+Sincerely,
+
+[STAFF_NAME]
+[AGENCY_NAME]`,
+
+        housing: (codes) => `[DATE]
+
+Housing Services/Shelter Intake Team
+
+RE: Emergency Housing Request for [CLIENT_NAME]
+
+We are supporting [CLIENT_NAME] who is experiencing housing instability in [BOROUGH].
+
+Documented conditions:
+${codes.filter(c => c.category === 'Housing').map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+Housing instability is significantly impacting their health and ability to maintain medical care. We request expedited placement or housing resources.
+
+For coordination, contact [AGENCY_PHONE] or [AGENCY_EMAIL].
+
+Urgently submitted,
+
+[STAFF_NAME]
+[AGENCY_NAME]`,
+
+        employer: (codes) => `[DATE]
+
+To Whom It May Concern,
+
+RE: Accommodation Request for [CLIENT_NAME]
+
+We are providing support services for [CLIENT_NAME] at [AGENCY_NAME]. They are experiencing documented barriers that may temporarily affect their work schedule.
+
+Relevant documentation:
+${codes.map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+We request your understanding and any reasonable accommodations that may be available while these barriers are being addressed.
+
+Please contact [AGENCY_PHONE] or [AGENCY_EMAIL] if you need additional information.
+
+Sincerely,
+
+[STAFF_NAME]
+[AGENCY_NAME]`
+      },
+      es: {
+        general: (codes) => `[FECHA]
+
+A quien corresponda,
+
+ASUNTO: Solicitud de Servicios de Apoyo para [CLIENT_NAME]
+
+Estamos proporcionando servicios de gestión de casos para [CLIENT_NAME] a través de [AGENCY_NAME]. Nuestra evaluación ha identificado barreras significativas que afectan su capacidad para acceder y mantener la atención necesaria.
+
+Se han documentado los siguientes códigos ICD-10:
+${codes.map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+Estas barreras impactan significativamente la capacidad de [CLIENT_NAME] para mantener citas y seguir las recomendaciones de tratamiento.
+
+Para información adicional o coordinación, comuníquese con [AGENCY_PHONE] o [AGENCY_EMAIL].
+
+Atentamente,
+
+[STAFF_NAME]
+[AGENCY_NAME]`,
+
+        snap: (codes) => `[FECHA]
+
+Equipo de Revisión de SNAP/Beneficios
+
+ASUNTO: Solicitud de Beneficios SNAP para [CLIENT_NAME]
+
+Estamos apoyando a [CLIENT_NAME] quien está experimentando inseguridad alimentaria documentada.
+
+Documentación ICD-10 relevante:
+${codes.filter(c => c.code === 'Z59.41' || c.category === 'Food').map(c => `• ${c.code} - ${c.title}`).join('\n')}
+
+Solicitamos consideración acelerada para beneficios SNAP.
+
+Para verificación, contacte [AGENCY_PHONE] o [AGENCY_EMAIL].
+
+Respetuosamente,
+
+[STAFF_NAME]
+[AGENCY_NAME]`
+      }
+    };
+
+    let currentResult = null;
+    let processingStartTime = 0;
+
+    function suggestZCodes(text, tags) {
+      const combinedText = (text + ' ' + tags.join(' ')).toLowerCase();
+      const suggestions = [];
+      const seenCodes = new Set();
+      
+      for (const rule of MAPPING_RULES) {
+        if (rule.patterns.test(combinedText)) {
+          for (const code of rule.codes) {
+            if (!seenCodes.has(code)) {
+              const codeInfo = CODE_REGISTRY[code];
+              if (codeInfo) {
+                suggestions.push({
+                  code,
+                  title: codeInfo.title,
+                  category: codeInfo.category,
+                  rationale: rule.rationale,
+                  confidence: 85 + Math.random() * 10
+                });
+                seenCodes.add(code);
+              }
+            }
+          }
+        }
+      }
+      
+      // If no matches, add a generic code
+      if (suggestions.length === 0) {
+        suggestions.push({
+          code: 'Z65.8',
+          title: CODE_REGISTRY['Z65.8'].title,
+          category: CODE_REGISTRY['Z65.8'].category,
+          rationale: 'General psychosocial circumstances',
+          confidence: 70
+        });
+      }
+      
+      return suggestions.sort((a, b) => b.confidence - a.confidence);
+    }
+
+    function generateAnalysis() {
+      processingStartTime = performance.now();
+      
+      const noteText = document.getElementById('noteInput').value.trim();
+      const selectedTags = Array.from(document.querySelectorAll('.checkbox-label input:checked'))
+        .map(cb => cb.value);
+      const letterType = document.getElementById('letterType').value;
+      const language = document.getElementById('language').value;
+      
+      const warningsDiv = document.getElementById('warnings');
+      warningsDiv.innerHTML = '';
+      
+      if (!noteText) {
+        warningsDiv.innerHTML = '<div class="warning-box">⚠️ Please enter a barrier note to analyze</div>';
+        return;
+      }
+      
+      if (noteText.length < 40) {
+        warningsDiv.innerHTML = '<div class="info-box">ℹ️ Note is short. More detail will improve code suggestions.</div>';
+      }
+      
+      // Get code suggestions
+      const candidates = suggestZCodes(noteText, selectedTags);
+      const selected = candidates.slice(0, 5);
+      
+      // Generate documentation snippet
+      const codeList = selected.map(c => `${c.title} (${c.code})`).join(', ');
+      const snippet = `[CLIENT_NAME] presents with barriers affecting care continuity, including ${codeList}. Comprehensive support coordination is indicated to address these social determinants of health.`;
+      
+      // Generate letter
+      const templates = LETTER_TEMPLATES[language] || LETTER_TEMPLATES.en;
+      const letterTemplate = templates[letterType] || templates.general;
+      const letter = letterTemplate(selected);
+      
+      // Calculate metrics
+      const processingTime = (performance.now() - processingStartTime).toFixed(1);
+      const avgConfidence = Math.round(selected.reduce((sum, c) => sum + c.confidence, 0) / selected.length);
+      
+      // Store result
+      currentResult = {
+        candidates,
+        selected,
+        snippet,
+        letter,
+        letterType,
+        language,
+        processingTime,
+        avgConfidence
+      };
+      
+      // Display results
+      displayResults();
+    }
+
+    function displayResults() {
+      if (!currentResult) return;
+      
+      // Show sections
+      document.getElementById('metricsSection').style.display = 'block';
+      document.getElementById('resultsSection').style.display = 'grid';
+      
+      // Update metrics
+      document.getElementById('metricCodes').textContent = currentResult.candidates.length;
+      document.getElementById('metricConfidence').textContent = currentResult.avgConfidence + '%';
+      document.getElementById('metricTime').textContent = currentResult.processingTime + 'ms';
+      
+      // Display candidates
+      const candidatesHtml = currentResult.candidates.map(c => `
+        <div class="code-item">
+          <span class="code-pill">${c.code} - ${c.title}</span>
+          <div class="rationale">${c.rationale} (Confidence: ${Math.round(c.confidence)}%)</div>
+        </div>
+      `).join('');
+      document.getElementById('candidatesContainer').innerHTML = candidatesHtml;
+      
+      // Display selected codes
+      const selectedHtml = currentResult.selected.map(c => 
+        `<span class="code-pill">${c.code}</span>`
+      ).join('');
+      document.getElementById('selectedContainer').innerHTML = selectedHtml;
+      
+      // Display snippet and letter
+      document.getElementById('snippetBox').textContent = currentResult.snippet;
+      document.getElementById('letterPreview').textContent = currentResult.letter;
+    }
+
+    function copyJSON() {
+      if (!currentResult) {
+        alert('Please generate an analysis first');
+        return;
+      }
+      
+      const jsonOutput = {
+        z_code_candidates: currentResult.candidates,
+        selected_codes: currentResult.selected.map(c => c.code),
+        documentation_snippet: currentResult.snippet,
+        letter: {
+          type: currentResult.letterType,
+          language: currentResult.language,
+          body: currentResult.letter
+        },
+        processing_time: currentResult.processingTime
+      };
+      
+      navigator.clipboard.writeText(JSON.stringify(jsonOutput, null, 2))
+        .then(() => alert('JSON copied to clipboard'))
+        .catch(() => alert('Failed to copy JSON'));
+    }
+
+    function copySnippet() {
+      if (!currentResult) return;
+      navigator.clipboard.writeText(currentResult.snippet)
+        .then(() => alert('Snippet copied to clipboard'))
+        .catch(() => alert('Failed to copy snippet'));
+    }
+
+    function copyLetter() {
+      if (!currentResult) return;
+      navigator.clipboard.writeText(currentResult.letter)
+        .then(() => alert('Letter copied to clipboard'))
+        .catch(() => alert('Failed to copy letter'));
+    }
+
+    function downloadLetter() {
+      if (!currentResult) return;
+      
+      const blob = new Blob([currentResult.letter], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `support_letter_${currentResult.letterType}_${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function resetForm() {
+      document.getElementById('noteInput').value = '';
+      document.getElementById('zipInput').value = '';
+      document.querySelectorAll('.checkbox-label input').forEach(cb => cb.checked = false);
+      document.getElementById('letterType').value = 'general';
+      document.getElementById('language').value = 'en';
+      document.getElementById('warnings').innerHTML = '';
+      document.getElementById('metricsSection').style.display = 'none';
+      document.getElementById('resultsSection').style.display = 'none';
+      currentResult = null;
+    }
+  </script>
+
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw" defer></script>
+  <script>
+    (function(){
+      const waitForSDK = () => new Promise(res => {
+        if (window.SpeechSDK) return res();
+        const iv = setInterval(()=>{ if(window.SpeechSDK){ clearInterval(iv); res(); } },50);
+      });
+      let recognizer = null;
+      let isDown = false;
+      let tokenPayload = null;
+      const statusEl = () => document.getElementById('sttStatus');
+      const noteEl = () => document.getElementById('barrierNote');
+      const btnEl = () => document.getElementById('barrierNoteMicBtn');
+      async function getToken(){
+        if(tokenPayload && tokenPayload.expiresAt && Date.now() < tokenPayload.expiresAt - 60*1000) return tokenPayload;
+        const r = await fetch('/.netlify/functions/speech-token',{method:'POST'});
+        const j = await r.json();
+        tokenPayload = { token:j.token, region:j.region, endpointId:j.endpointId, expiresAt: Date.now()+ j.expiresIn*1000 };
+        return tokenPayload;
+      }
+      function appendText(text){
+        const el = noteEl();
+        const sep = el.value && !el.value.endsWith(' ') ? ' ' : '';
+        el.value = (el.value || '') + sep + text;
+      }
+      async function start(){
+        isDown = true;
+        statusEl().textContent='listening…';
+        await waitForSDK();
+        const creds = await getToken();
+        const speechConfig = SpeechSDK.SpeechConfig.fromAuthorizationToken(creds.token, creds.region);
+        if (creds.endpointId) speechConfig.endpointId = creds.endpointId;
+        speechConfig.speechRecognitionLanguage = 'en-US';
+        const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+        recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+        recognizer.recognizing = (s,e)=>{ if(!isDown) return; statusEl().textContent = 'listening… (' + (e.result && e.result.text || '') + ')'; };
+        recognizer.recognized = (s,e)=>{ if(e.result && e.result.text){ appendText(e.result.text); } };
+        recognizer.sessionStopped = ()=>{ statusEl().textContent='paused'; };
+        recognizer.canceled = ()=>{ statusEl().textContent='paused'; };
+        recognizer.startContinuousRecognitionAsync();
+      }
+      function stop(){
+        isDown=false;
+        if(recognizer){
+          recognizer.stopContinuousRecognitionAsync(()=>{ statusEl().textContent='paused'; recognizer.close(); recognizer=null; }, ()=>{ statusEl().textContent='paused'; recognizer.close(); recognizer=null; });
+        } else { statusEl().textContent='paused'; }
+      }
+      document.addEventListener('DOMContentLoaded', ()=>{
+        const b = btnEl();
+        if(!b) return;
+        const down = (e)=>{ e.preventDefault(); start(); };
+        const up = (e)=>{ e.preventDefault(); stop(); };
+        b.addEventListener('mousedown', down);
+        b.addEventListener('touchstart', down);
+        b.addEventListener('mouseup', up);
+        b.addEventListener('mouseleave', up);
+        b.addEventListener('touchend', up);
+      });
+    })();
+  </script>
+    </body>
+</html>

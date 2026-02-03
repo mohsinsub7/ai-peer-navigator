@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Peer Assist</title>
+  <script src="auth-check.js" defer onerror="console.warn('auth-check.js not loaded')"></script>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --sidebar-bg: #f1f5f9;
+      --text: #1e293b;
+      --text-secondary: #475569;
+      --muted: #94a3b8;
+      --accent: #2563eb;
+      --accent-light: #dbeafe;
+      --accent-hover: #1d4ed8;
+      --border: #e2e8f0;
+      --user-bg: #2563eb;
+      --user-text: #ffffff;
+      --assistant-bg: #ffffff;
+      --note-bg: #f0fdf4;
+      --note-border: #86efac;
+      --note-header: #166534;
+      --warning-bg: #fef3c7;
+      --warning-border: #fbbf24;
+      --success: #10b981;
+      --radius: 12px;
+      --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Screen reader only - for accessibility */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-wrap {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #2563eb, #7c3aed);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .header-text .title {
+      font-weight: 700;
+      font-size: 17px;
+      color: var(--text);
+    }
+
+    .header-text .sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .flex-grow { flex: 1; }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.15s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:hover { background: var(--bg); border-color: var(--accent); color: var(--accent); }
+    .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn.primary:hover { background: var(--accent-hover); }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      display: flex;
+      height: calc(100vh - 61px);
+      max-width: 1280px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    /* ── CHAT AREA ── */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      display: flex;
+      gap: 10px;
+      animation: slideIn 0.25s ease-out;
+      max-width: 100%;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .message.user { justify-content: flex-end; }
+
+    .message-content {
+      max-width: 72%;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      line-height: 1.65;
+      word-wrap: break-word;
+    }
+
+    .message.user .message-content {
+      background: var(--user-bg);
+      color: var(--user-text);
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant .message-content {
+      background: var(--assistant-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      border-bottom-left-radius: 4px;
+    }
+
+    /* ── NOTE OUTPUT STYLING ── */
+    .message.assistant .message-content.note-output {
+      max-width: 85%;
+      background: var(--note-bg);
+      border: 2px solid var(--note-border);
+      position: relative;
+    }
+
+    .note-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #166534;
+      color: #fff;
+      margin: -12px -16px 12px -16px;
+      padding: 10px 16px;
+      border-radius: 10px 10px 0 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .note-header .copy-btn {
+      background: rgba(255,255,255,0.2);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .note-header .copy-btn:hover { background: rgba(255,255,255,0.3); }
+
+    .note-body {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      color: #1e293b;
+    }
+
+    /* ── MARKDOWN STYLING IN ASSISTANT MESSAGES ── */
+    .message.assistant .message-content h3 {
+      font-size: 13px;
+      font-weight: 700;
+      margin: 14px 0 6px 0;
+      padding-bottom: 4px;
+      border-bottom: 1px solid var(--border);
+      color: var(--accent);
+    }
+
+    .message.assistant .message-content h3:first-child { margin-top: 0; }
+
+    .message.assistant .message-content strong { color: var(--text); font-weight: 700; }
+    .message.assistant .message-content em { color: var(--text-secondary); }
+
+    .message.assistant .message-content ul,
+    .message.assistant .message-content ol {
+      margin: 6px 0;
+      padding-left: 6px;
+      list-style: none;
+    }
+
+    .message.assistant .message-content ol { counter-reset: step-counter; }
+
+    .message.assistant .message-content li {
+      margin: 4px 0;
+      line-height: 1.55;
+      padding-left: 10px;
+      position: relative;
+    }
+
+    .message.assistant .message-content ul li::before {
+      content: "\2022";
+      color: var(--accent);
+      font-weight: bold;
+      position: absolute;
+      left: -4px;
+    }
+
+    .message.assistant .message-content .step-num {
+      color: var(--accent);
+      font-weight: 700;
+      margin-right: 4px;
+    }
+
+    .message.assistant .message-content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 14px 0;
+    }
+
+    .message.assistant .message-content p { margin: 6px 0; }
+
+    .message.assistant .message-content .section-quick {
+      background: #eff6ff;
+      border-left: 3px solid var(--accent);
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+
+    .message.assistant .message-content .section-action {
+      background: #f0fdf4;
+      border-left: 3px solid #10b981;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+
+    .message.assistant .message-content .section-warning {
+      background: #fefce8;
+      border-left: 3px solid #eab308;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+
+    .message.assistant .message-content .section-resource {
+      background: #faf5ff;
+      border-left: 3px solid #8b5cf6;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+
+    .message.assistant .message-content .disclaimer {
+      font-size: 12px;
+      color: #92400e;
+      background: var(--warning-bg);
+      border: 1px solid var(--warning-border);
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    .message.system .message-content {
+      background: #fee2e2;
+      color: #991b1b;
+      border: 1px solid #fca5a5;
+      max-width: 90%;
+    }
+
+    /* ── CRISIS MESSAGE STYLING ── */
+    .message.assistant .message-content.crisis-output {
+      max-width: 90%;
+      background: #fef2f2;
+      border: 2px solid #ef4444;
+      position: relative;
+      overflow-x: hidden;
+      word-wrap: break-word;
+    }
+
+    .crisis-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #dc2626;
+      color: #fff;
+      margin: -12px -16px 12px -16px;
+      padding: 10px 16px;
+      border-radius: 10px 10px 0 0;
+      font-size: 14px;
+      font-weight: 700;
+      animation: crisisPulse 2s infinite;
+    }
+
+    @keyframes crisisPulse {
+      0%, 100% { background: #dc2626; }
+      50% { background: #b91c1c; }
+    }
+
+    /* ── SESSION RESUME BANNER ── */
+    .session-resume-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin: 8px 0;
+      font-size: 13px;
+      color: #1e40af;
+      animation: slideIn 0.25s ease-out;
+    }
+
+    .session-resume-banner button {
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    .session-resume-banner button.secondary {
+      background: transparent;
+      color: #2563eb;
+      border: 1px solid #2563eb;
+    }
+
+    .session-resume-banner button:hover { opacity: 0.9; }
+
+    /* ── LOADING ── */
+    .loading { display: flex; gap: 5px; align-items: center; padding: 4px 0; }
+    .loading span {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 1.4s infinite;
+    }
+    .loading span:nth-child(1) { animation-delay: 0s; }
+    .loading span:nth-child(2) { animation-delay: 0.2s; }
+    .loading span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes pulse {
+      0%, 60%, 100% { opacity: 0.25; }
+      30% { opacity: 1; }
+    }
+
+    /* ── INPUT SECTION ── */
+    .input-section {
+      border-top: 1px solid var(--border);
+      padding: 14px 20px;
+      background: var(--card);
+    }
+
+    .input-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .input-row input[type="text"] {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-row input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+    .input-row input[type="text"]::placeholder { color: var(--muted); }
+
+    .send-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 11px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── NOTE ACTIONS BAR ── */
+    .note-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .note-action-btn {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .note-action-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 280px;
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .sidebar-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .sidebar-card h3 {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .sidebar-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.55;
+    }
+
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+
+    .tag {
+      display: inline-block;
+      background: var(--accent-light);
+      border: 1px solid #bfdbfe;
+      color: var(--accent);
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .tag:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .status {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+    }
+
+    .warning-card {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+    }
+
+    .warning-card h3 { color: #92400e; }
+    .warning-card p { color: #78350f; }
+
+    .session-info {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: center;
+      padding: 8px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      main { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        flex-direction: row;
+        padding: 10px;
+        overflow-x: auto;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        order: -1;
+      }
+      .sidebar-card { flex-shrink: 0; width: 220px; margin-bottom: 0; margin-right: 10px; }
+      .message-content { max-width: 88%; }
+      .message.assistant .message-content.note-output { max-width: 95%; }
+    }
+
+    /* ── SCROLLBAR ── */
+    .messages::-webkit-scrollbar { width: 6px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .messages::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .messages { scrollbar-color: #cbd5e1 transparent; scrollbar-width: thin; }
+  </style>
+</head>
+<body>
+  <header role="banner">
+    <div class="header-wrap">
+      <div class="header-icon" aria-hidden="true">🤝</div>
+      <div class="header-text">
+        <div class="title">AI Peer Assist</div>
+        <div class="sub">Evidence-based peer support guidance</div>
+      </div>
+      <div class="flex-grow"></div>
+      <button class="btn" id="btn-clear" aria-label="Clear conversation session">Clear Session</button>
+      <a class="btn" href="index.html" aria-label="Return to home page">← Home</a>
+    </div>
+  </header>
+
+  <main role="main">
+    <div class="chat-container">
+      <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation messages">
+        <div class="message assistant">
+          <div class="message-content">
+            <strong>Welcome to AI Peer Assist</strong><br><br>
+            I'm here to support you during client visits. Tell me about your client's situation and I'll provide guidance, resources, and action steps.<br><br>
+            When you're done, ask me to <strong>generate a SOAP, DAP, GIRP, or BIRP note</strong> and I'll create a chart-ready clinical note from our conversation.<br><br>
+            <em>I remember everything in this session — even if you refresh the page.</em>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-section">
+        <div class="input-row">
+          <label for="user-input" class="sr-only">Message input</label>
+          <input
+            type="text"
+            id="user-input"
+            placeholder="Describe your client's situation or ask for help..."
+            autocomplete="off"
+            aria-label="Type your message here"
+          />
+          <button class="send-btn" id="send-btn" aria-label="Send message">Send</button>
+        </div>
+        <div class="note-actions" role="toolbar" aria-label="Generate clinical notes">
+          <button class="note-action-btn" data-note="SOAP" aria-label="Generate SOAP clinical note">📋 SOAP Note</button>
+          <button class="note-action-btn" data-note="DAP" aria-label="Generate DAP clinical note">📋 DAP Note</button>
+          <button class="note-action-btn" data-note="GIRP" aria-label="Generate GIRP clinical note">📋 GIRP Note</button>
+          <button class="note-action-btn" data-note="BIRP" aria-label="Generate BIRP clinical note">📋 BIRP Note</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="sidebar" role="complementary" aria-label="Quick tools and information">
+      <div class="sidebar-card">
+        <h3>Quick Topics</h3>
+        <div class="tags">
+          <div class="tag" data-prompt="My client is hungry and needs food assistance today">Food Access</div>
+          <div class="tag" data-prompt="Client needs emergency shelter tonight in Manhattan">Shelter</div>
+          <div class="tag" data-prompt="Client is in recovery and missed their medication appointment">Recovery</div>
+          <div class="tag" data-prompt="How do I support someone in crisis without clinical intervention?">Crisis</div>
+          <div class="tag" data-prompt="Client needs help with Medicaid enrollment">Benefits</div>
+          <div class="tag" data-prompt="What are best practices for peer documentation?">Documentation</div>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Generate Notes</h3>
+        <p>After discussing your client's visit, click a note button below the chat or type "make me a SOAP note" to generate chart-ready documentation.</p>
+        <div class="status">
+          <div class="status-dot"></div>
+          <span>Session memory active</span>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>Knowledge Base</h3>
+        <p>Powered by Vertex AI Search with access to peer support guidelines, NYC agency directories, and evidence-based toolkits.</p>
+      </div>
+
+      <div class="sidebar-card warning-card">
+        <h3>Important</h3>
+        <p>I'm not a clinician. For medical advice, diagnosis, or crisis help, contact a licensed professional or call 988 (Suicide & Crisis Lifeline).</p>
+      </div>
+
+      <div class="session-info" id="session-info">Session: 0 messages</div>
+    </aside>
+  </main>
+
+  <script>
+    const messagesDiv = document.getElementById('messages');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const clearBtn = document.getElementById('btn-clear');
+    const tags = document.querySelectorAll('.tag');
+    const noteActionBtns = document.querySelectorAll('.note-action-btn');
+    const sessionInfo = document.getElementById('session-info');
+
+    let isLoading = false;
+
+    // ── CONVERSATION HISTORY ──
+    let conversationHistory = [];
+
+    // ── SESSION PERSISTENCE ──
+    const SESSION_KEY = 'ai_peer_assist_session';
+    const SESSION_EXPIRY_HOURS = 24;
+
+    function saveSession() {
+      try {
+        const sessionData = {
+          history: conversationHistory,
+          timestamp: Date.now(),
+        };
+        sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+      } catch (e) {
+        console.warn('Could not save session:', e);
+      }
+    }
+
+    function loadSession() {
+      try {
+        const raw = sessionStorage.getItem(SESSION_KEY);
+        if (!raw) return null;
+        const sessionData = JSON.parse(raw);
+        // Check expiry
+        const ageHours = (Date.now() - sessionData.timestamp) / (1000 * 60 * 60);
+        if (ageHours > SESSION_EXPIRY_HOURS) {
+          sessionStorage.removeItem(SESSION_KEY);
+          return null;
+        }
+        return sessionData;
+      } catch (e) {
+        console.warn('Could not load session:', e);
+        return null;
+      }
+    }
+
+    function clearSavedSession() {
+      sessionStorage.removeItem(SESSION_KEY);
+    }
+
+    function restoreSession(sessionData) {
+      conversationHistory = sessionData.history || [];
+      // Rebuild the chat UI from history
+      messagesDiv.innerHTML = '';
+      // Add welcome message
+      const welcome = document.createElement('div');
+      welcome.className = 'message assistant';
+      welcome.innerHTML = `<div class="message-content"><strong>Session restored</strong> — Continuing where you left off. (${conversationHistory.filter(h => h.role === 'user').length} previous messages)</div>`;
+      messagesDiv.appendChild(welcome);
+
+      for (const turn of conversationHistory) {
+        const msg = document.createElement('div');
+        if (turn.role === 'user') {
+          msg.className = 'message user';
+          msg.innerHTML = `<div class="message-content">${escapeHtml(turn.text)}</div>`;
+        } else {
+          msg.className = 'message assistant';
+          // Check if it looks like a note
+          if (turn.text.startsWith('**B - Behavior') || turn.text.startsWith('**S - Subjective') || turn.text.startsWith('**D - Data') || turn.text.startsWith('**G - Goal')) {
+            msg.innerHTML = `<div class="message-content note-output"><div class="note-header"><span>📋 Clinical Note (Restored)</span><button class="copy-btn" onclick="copyNote(this)">Copy</button></div><div class="note-body">${escapeHtml(turn.text)}</div></div>`;
+          } else {
+            msg.innerHTML = `<div class="message-content">${parseMarkdown(turn.text)}</div>`;
+          }
+        }
+        messagesDiv.appendChild(msg);
+      }
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      updateSessionInfo();
+    }
+
+    function updateSessionInfo() {
+      const count = conversationHistory.filter(h => h.role === 'user').length;
+      sessionInfo.textContent = `Session: ${count} message${count !== 1 ? 's' : ''}`;
+    }
+
+    // ── MARKDOWN PARSER ──
+    function parseMarkdown(text) {
+      if (!text) return '';
+
+      let html = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+
+        .replace(/^### 🎯(.*)$/gm, '<h3 class="section-header quick">🎯$1</h3><div class="section-quick">')
+        .replace(/^### 💬(.*)$/gm, '</div><h3 class="section-header say">💬$1</h3><div class="section-action">')
+        .replace(/^### ✅(.*)$/gm, '</div><h3 class="section-header action">✅$1</h3><div class="section-action">')
+        .replace(/^### 📍(.*)$/gm, '</div><h3 class="section-header resource">📍$1</h3><div class="section-resource">')
+        .replace(/^### ⚠️(.*)$/gm, '</div><h3 class="section-header warning">⚠️$1</h3><div class="section-warning">')
+        .replace(/^### 📝(.*)$/gm, '</div><h3 class="section-header doc">📝$1</h3><div class="section-quick">')
+        .replace(/^### (.*)$/gm, '</div><h3>$1</h3><div>')
+
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+
+        .replace(/^---$/gm, '</div><hr>')
+
+        .replace(/^(\d+)\.\s+(.*)$/gm, '<li><span class="step-num">$1.</span> $2</li>')
+        .replace(/^[•\-]\s+(.*)$/gm, '<li>$1</li>')
+
+        .replace(/(<li>.*<\/li>\n?)+/g, (match) => {
+          if (match.includes('step-num')) return '<ol>' + match + '</ol>';
+          return '<ul>' + match + '</ul>';
+        })
+
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+
+        .replace(/<div><\/div>/g, '')
+        .replace(/^<\/div>/, '')
+        .replace(/<div>$/, '');
+
+      if (html.includes('section-')) html += '</div>';
+
+      html = html.replace(/\*Disclaimer:([^*]*)\*/g, '<div class="disclaimer">⚠️ <strong>Disclaimer:</strong>$1</div>');
+      html = html.replace(/<br><br>/g, '<br>');
+      html = html.replace(/<p><\/p>/g, '');
+
+      return html;
+    }
+
+    // ── SEND MESSAGE ──
+    async function sendMessage(text) {
+      if (!text.trim() || isLoading) return;
+
+      isLoading = true;
+      sendBtn.disabled = true;
+
+      // Add user message to UI
+      const userMsg = document.createElement('div');
+      userMsg.className = 'message user';
+      userMsg.innerHTML = `<div class="message-content">${escapeHtml(text)}</div>`;
+      messagesDiv.appendChild(userMsg);
+
+      // Add to history BEFORE the API call
+      conversationHistory.push({ role: 'user', text: text });
+      saveSession(); // Persist immediately
+      updateSessionInfo();
+
+      // Show loading
+      const loadingMsg = document.createElement('div');
+      loadingMsg.className = 'message assistant';
+      loadingMsg.innerHTML = `<div class="message-content"><div class="loading"><span></span><span></span><span></span></div></div>`;
+      messagesDiv.appendChild(loadingMsg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      try {
+        const response = await fetch('/.netlify/functions/ai-peer-assist-chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: text,
+            history: conversationHistory.slice(0, -1) // Send all history except the current message (it's sent as `message`)
+          })
+        });
+
+        if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
+
+        const data = await response.json();
+        const responseText = data.response || 'No response received.';
+        const isNote = data.mode === 'note';
+        const isCrisis = data.mode === 'crisis';
+
+        // Add assistant response to history
+        conversationHistory.push({ role: 'model', text: responseText });
+        saveSession(); // Persist to sessionStorage
+
+        if (isCrisis) {
+          // Render as CRISIS alert
+          loadingMsg.innerHTML = `
+            <div class="message-content crisis-output">
+              <div class="crisis-header">
+                <span>🚨 CRISIS PROTOCOL ACTIVATED</span>
+              </div>
+              <div>${parseMarkdown(responseText)}</div>
+            </div>`;
+          // Announce to screen readers
+          announceToScreenReader('Crisis detected. Immediate action required. Crisis resources are displayed.');
+        } else if (isNote) {
+          // Render as clinical note
+          const noteFormat = data.noteFormat || 'BIRP';
+          loadingMsg.innerHTML = `
+            <div class="message-content note-output">
+              <div class="note-header">
+                <span>📋 ${noteFormat} Clinical Note</span>
+                <button class="copy-btn" onclick="copyNote(this)">Copy</button>
+              </div>
+              <div class="note-body">${escapeHtml(responseText)}</div>
+            </div>`;
+        } else {
+          // Render as guidance
+          const formattedResponse = parseMarkdown(responseText);
+          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}</div>`;
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        loadingMsg.className = 'message system';
+        loadingMsg.innerHTML = `<div class="message-content">Connection error: ${escapeHtml(error.message)}. Please try again.</div>`;
+        // Remove the failed assistant entry if we added one
+        if (conversationHistory[conversationHistory.length - 1]?.role === 'model') {
+          conversationHistory.pop();
+        }
+      }
+
+      isLoading = false;
+      sendBtn.disabled = false;
+      userInput.value = '';
+      userInput.focus();
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      updateSessionInfo();
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ── SCREEN READER ANNOUNCEMENT ──
+    function announceToScreenReader(message) {
+      const announcement = document.createElement('div');
+      announcement.setAttribute('role', 'alert');
+      announcement.setAttribute('aria-live', 'assertive');
+      announcement.className = 'sr-only';
+      announcement.textContent = message;
+      document.body.appendChild(announcement);
+      setTimeout(() => announcement.remove(), 3000);
+    }
+
+    function copyNote(btn) {
+      const noteBody = btn.closest('.note-output').querySelector('.note-body');
+      navigator.clipboard.writeText(noteBody.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      });
+    }
+
+    // ── EVENT LISTENERS ──
+    sendBtn.addEventListener('click', () => {
+      const text = userInput.value.trim();
+      if (text) sendMessage(text);
+    });
+
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const text = userInput.value.trim();
+        if (text) sendMessage(text);
+      }
+    });
+
+    // Quick topic tags
+    tags.forEach(tag => {
+      tag.addEventListener('click', () => {
+        const prompt = tag.getAttribute('data-prompt');
+        userInput.value = prompt;
+        userInput.focus();
+        sendMessage(prompt);
+      });
+    });
+
+    // Note generation buttons
+    noteActionBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const format = btn.getAttribute('data-note');
+        if (conversationHistory.length < 2) {
+          // Need at least one exchange before generating a note
+          const msg = document.createElement('div');
+          msg.className = 'message system';
+          msg.innerHTML = `<div class="message-content">Please discuss your client's visit first, then I can generate a ${format} note from our conversation.</div>`;
+          messagesDiv.appendChild(msg);
+          messagesDiv.scrollTop = messagesDiv.scrollHeight;
+          return;
+        }
+        sendMessage(`Generate a ${format} note for me based on our conversation`);
+      });
+    });
+
+    // Clear session
+    clearBtn.addEventListener('click', () => {
+      if (confirm('Clear this session? All conversation history will be lost.')) {
+        conversationHistory = [];
+        clearSavedSession();
+        updateSessionInfo();
+        messagesDiv.innerHTML = `
+          <div class="message assistant">
+            <div class="message-content">
+              <strong>Session cleared.</strong><br><br>
+              Tell me about your next client visit and I'll help with guidance, resources, and documentation.
+            </div>
+          </div>
+        `;
+      }
+    });
+
+    // ── SESSION RESTORE ON PAGE LOAD ──
+    const savedSession = loadSession();
+    if (savedSession && savedSession.history && savedSession.history.length > 0) {
+      const msgCount = savedSession.history.filter(h => h.role === 'user').length;
+      const ageMinutes = Math.round((Date.now() - savedSession.timestamp) / (1000 * 60));
+      const ageText = ageMinutes < 60 ? `${ageMinutes} min ago` : `${Math.round(ageMinutes / 60)}h ago`;
+
+      // Show resume banner
+      const banner = document.createElement('div');
+      banner.className = 'session-resume-banner';
+      banner.innerHTML = `
+        <span>📂 Previous session found (${msgCount} messages, ${ageText})</span>
+        <span>
+          <button id="resume-session">Resume</button>
+          <button id="new-session" class="secondary">New Session</button>
+        </span>
+      `;
+      messagesDiv.appendChild(banner);
+
+      document.getElementById('resume-session').addEventListener('click', () => {
+        banner.remove();
+        restoreSession(savedSession);
+      });
+
+      document.getElementById('new-session').addEventListener('click', () => {
+        banner.remove();
+        clearSavedSession();
+        conversationHistory = [];
+        updateSessionInfo();
+      });
+    }
+
+    userInput.focus();
+    updateSessionInfo();
+  </script>
+</body>
+</html>

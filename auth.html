@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Required - BH Navigator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #1e293b);
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 16px;
+      padding: 40px;
+      max-width: 400px;
+      width: 90%;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .subtitle {
+      text-align: center;
+      opacity: 0.8;
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+    input::placeholder { color: rgba(255, 255, 255, 0.5); }
+    input:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #38bdf8;
+      color: #0f172a;
+      border: none;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #0ea5e9;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(56, 189, 248, 0.4);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .error {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #fecaca;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 12px;
+      font-size: 14px;
+      display: none;
+    }
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: 12px;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔒 BH Navigator</h1>
+    <div class="subtitle">Demo Access Required</div>
+    
+    <form id="loginForm">
+      <label for="password">Enter Password</label>
+      <input 
+        type="password" 
+        id="password" 
+        placeholder="Password"
+        autocomplete="current-password"
+        required
+      />
+      <button type="submit" id="submitBtn">Access Demo</button>
+    </form>
+    
+    <div class="error" id="error">Incorrect password. Please try again.</div>
+    
+    <div class="footer">
+      Demo Mode • No PHI
+    </div>
+  </div>
+
+  <script>
+    // YOUR PASSWORD HERE - Change this to whatever you want
+    const CORRECT_PASSWORD = 'DEMO2024';
+    
+    const form = document.getElementById('loginForm');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById('submitBtn');
+    const errorDiv = document.getElementById('error');
+
+    // Check if already authenticated
+    if (sessionStorage.getItem('auth_token') === btoa(CORRECT_PASSWORD)) {
+      window.location.href = 'index.html';
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      errorDiv.style.display = 'none';
+      
+      const password = passwordInput.value;
+      
+      if (password === CORRECT_PASSWORD) {
+        // Store authentication token (base64 encoded)
+        sessionStorage.setItem('auth_token', btoa(password));
+        
+        // Redirect to main page
+        window.location.href = 'index.html';
+      } else {
+        // Show error
+        errorDiv.style.display = 'block';
+        passwordInput.value = '';
+        passwordInput.focus();
+        
+        // Shake animation
+        errorDiv.style.animation = 'shake 0.3s';
+        setTimeout(() => errorDiv.style.animation = '', 300);
+      }
+    });
+
+    // Simple shake animation
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>

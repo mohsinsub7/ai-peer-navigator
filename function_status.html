@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Function Self-Test</title>
+<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;margin:24px auto;padding:0 12px}pre{white-space:pre-wrap;background:#f6f7fb;border:1px solid #e5e7eb;border-radius:8px;padding:10px}</style>
+</head><body>
+<h2>Function Self-Test</h2>
+<p><a id="health" href="#">1) Check Health (GET)</a> · <a id="post" href="#">2) Send Test POST</a></p>
+<pre id="out">Ready…</pre>
+<script>
+document.getElementById('health').onclick = async (e)=>{
+  e.preventDefault();
+  const r = await fetch('/.netlify/functions/generate-note'); // GET diagnostics
+  document.getElementById('out').textContent = await r.text();
+};
+document.getElementById('post').onclick = async (e)=>{
+  e.preventDefault();
+  const payload = {
+    template:'dap',
+    redacted_text:'[CLIENT_NAME] missed doses due to Access-A-Ride delays; couch-surfing; food insecurity.',
+    codes:[{code:'Z59.82', title:'Transportation insecurity'}],
+    tags:['transportation','housing','food']
+  };
+  const r = await fetch('/.netlify/functions/generate-note', {
+    method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(payload)
+  });
+  document.getElementById('out').textContent = await r.text();
+};
+</script>
+</body></html>

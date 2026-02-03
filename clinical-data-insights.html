@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Clinical Data Insights — AI Analytics</title>
+  <script src="auth-check.js"></script>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+  <style>
+    :root{ --bg:#0f172a; --card:#0b1424; --muted:#94a3b8; --text:#e5e7eb; --accent:#38bdf8; --warning:#f59e0b; --danger:#ef4444; }
+    *{box-sizing:border-box}
+    body{ margin:0; background:linear-gradient(180deg,#0b1220 0%, #0f172a 50%, #0b1220 100%);
+          color:var(--text); font-family:Inter,ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto }
+    header{ position:sticky; top:0; z-index:10; background:rgba(15,23,42,.85); backdrop-filter: blur(8px);
+            border-bottom:1px solid rgba(148,163,184,.2) }
+    .wrap{ max-width:1400px; margin:0 auto; padding:16px 20px }
+    .flex{ display:flex; align-items:center; gap:12px }
+    .title{ font-weight:800; font-size:20px }
+    .sub{ font-size:12px; color:var(--muted) }
+    .btn{ appearance:none; border:1px solid rgba(148,163,184,.25); background:#091120; color:var(--text);
+          padding:10px 14px; border-radius:10px; cursor:pointer; font-weight:600; font-size:14px }
+    .btn:hover{ border-color:var(--accent); transform:translateY(-1px) }
+    .btn.primary{ background:var(--accent); color:#0f172a; border-color:var(--accent) }
+    .btn:disabled{ opacity:0.5; cursor:not-allowed }
+    main .wrap{ padding-top:22px }
+    .card{ background:radial-gradient(800px 140px at 20% -15%, rgba(56,189,248,.10), transparent 50%), #0b1424;
+           border:1px solid rgba(148,163,184,.22); border-radius:16px; padding:16px; margin-bottom:16px }
+    .grid{ display:grid; gap:16px }
+    .grid.kpi{ grid-template-columns:repeat(auto-fit,minmax(200px,1fr)) }
+    .grid.charts{ grid-template-columns:repeat(2,minmax(0,1fr)) }
+    @media (max-width:1000px){ .grid.charts{grid-template-columns:1fr} }
+    .drop{ display:grid; place-items:center; height:170px; border:2px dashed rgba(148,163,184,.35); border-radius:14px; transition:all .2s }
+    .drop.dragover{ border-color:var(--accent); background:rgba(56,189,248,.05) }
+    .muted{ color:var(--muted) }
+    .kpi{ padding:14px; border-radius:12px; border:1px solid rgba(148,163,184,.2); background:#0b162a }
+    .kpi .label{ font-size:12px; color:var(--muted); margin-bottom:6px }
+    .kpi .value{ font-size:28px; font-weight:800; margin-top:4px; line-height:1 }
+    .kpi .trend{ font-size:11px; color:var(--muted); margin-top:8px }
+    .chart{ height:340px; border:1px solid rgba(148,163,184,.15); border-radius:12px; background:#0b162a; padding:8px }
+    .insights li{ margin:8px 0; line-height:1.6 }
+    .hidden{ display:none }
+    .warning-box{ background:rgba(245,158,11,.1); border:1px solid rgba(245,158,11,.3); border-radius:12px; padding:16px; margin-bottom:16px }
+    .warning-box h4{ margin:0 0 8px; color:var(--warning); font-size:14px; display:flex; align-items:center; gap:8px }
+    .warning-box p{ margin:6px 0; font-size:13px; color:var(--text); line-height:1.5 }
+    .warning-box ul{ margin:8px 0; padding-left:20px; font-size:13px }
+    .toast{ position:fixed; right:16px; bottom:16px; padding:12px 16px; background:#081018; border:1px solid rgba(148,163,184,.3); 
+            border-radius:12px; z-index:1000; max-width:400px; box-shadow:0 10px 40px rgba(0,0,0,.3) }
+    .loading-spinner{ width:48px; height:48px; border:4px solid rgba(56,189,248,.2); border-top-color:var(--accent); 
+                       border-radius:50%; animation:spin 1s linear infinite; margin:0 auto }
+    @keyframes spin{ to{ transform:rotate(360deg) } }
+    .domain-tags{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px }
+    .domain-tag{ display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; 
+                 background:rgba(56,189,248,.15); border:1px solid rgba(56,189,248,.3); font-size:12px; font-weight:600 }
+    .domain-tag .dot{ width:6px; height:6px; border-radius:50%; background:var(--accent) }
+    .file-info{ background:rgba(148,163,184,.1); border-radius:8px; padding:12px; margin-top:12px; font-size:13px }
+    .file-info strong{ color:var(--accent) }
+    .progress-bar{ width:100%; height:6px; background:rgba(148,163,184,.2); border-radius:3px; overflow:hidden; margin-top:12px }
+    .progress-fill{ height:100%; background:linear-gradient(90deg,var(--accent),#0ea5e9); transition:width .3s ease; width:0% }
+    .export-section{ display:flex; gap:8px; margin-top:12px; flex-wrap:wrap }
+    h3{ margin:0 0 16px; font-size:18px; font-weight:700 }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="flex">
+        <div>
+          <div class="title">Clinical Data Insights — AI Analytics</div>
+          <div class="sub">Advanced analytics for Behavioral Health, Mental Health, SUD, SDOH, Quality Measures & More</div>
+        </div>
+        <div style="flex:1"></div>
+        <a href="upload-guide.html" class="btn" style="text-decoration:none">📖 Upload Guide</a>
+        <button class="btn" id="btn-sample">Load Sample</button>
+        <label class="btn primary" for="file-input">Upload Clinical Data</label>
+        <input id="file-input" type="file" accept=".csv" style="display:none"/>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <!-- PHI Warning -->
+      <div class="warning-box">
+        <h4>
+          <svg width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5zm.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+          </svg>
+          HIPAA & Privacy Warning
+        </h4>
+        <p><strong>Do not upload files containing Protected Health Information (PHI) or identifiable patient data.</strong></p>
+        <ul>
+          <li>Remove all patient names, MRNs, dates of birth, addresses, and contact information</li>
+          <li>Use de-identified or aggregated data only</li>
+          <li>For SUD data: 42 CFR Part 2 restrictions apply - ensure proper authorization</li>
+          <li>Files are processed server-side and temporarily stored - they are deleted after analysis</li>
+          <li>This tool is for demonstration and analysis purposes only</li>
+        </ul>
+      </div>
+
+      <!-- Upload Zone -->
+      <div class="card">
+        <div id="dropzone" class="drop">
+          <div>
+            <div style="font-weight:700; font-size:18px; text-align:center">Drop CSV File Here</div>
+            <div class="muted" style="text-align:center; margin-top:6px">CSV Format Only • Max 4MB</div>
+            <div class="muted" style="text-align:center; margin-top:4px; font-size:12px">
+              <a href="upload-guide.html" style="color:var(--accent); text-decoration:none">Need help? View Upload Guide →</a>
+            </div>
+            <div class="domain-tags" style="margin-top:16px; justify-content:center">
+              <div class="domain-tag"><span class="dot"></span>Behavioral Health</div>
+              <div class="domain-tag"><span class="dot"></span>Mental Health</div>
+              <div class="domain-tag"><span class="dot"></span>Substance Use</div>
+              <div class="domain-tag"><span class="dot"></span>SDOH</div>
+              <div class="domain-tag"><span class="dot"></span>Quality Measures</div>
+              <div class="domain-tag"><span class="dot"></span>Billing/RCM</div>
+            </div>
+          </div>
+        </div>
+        <div id="file-info" class="file-info hidden"></div>
+      </div>
+
+      <!-- Data Profile -->
+      <section id="profile-section" class="card">
+        <h3>Data Profile</h3>
+        <div id="profile-content" class="muted">No data uploaded yet.</div>
+        <div id="detected-domains" class="hidden">
+          <h4 style="font-size:14px; margin:16px 0 8px; color:var(--accent)">Detected Clinical Domains:</h4>
+          <div id="domain-list" class="domain-tags"></div>
+        </div>
+      </section>
+
+      <!-- Loading Section -->
+      <section id="loading-section" class="card hidden" style="text-align:center; padding:40px;">
+        <div class="loading-spinner"></div>
+        <div id="loading-text" style="margin-top:16px; font-size:16px; font-weight:600;">🧠 Analyzing clinical data...</div>
+        <div class="muted" style="margin-top:8px; font-size:14px;">AI is generating insights across multiple domains</div>
+        <div class="progress-bar">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </section>
+
+      <!-- KPI Section -->
+      <section id="kpi-section" class="card hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
+          <h3 id="dash-title" style="margin:0">Key Performance Indicators</h3>
+          <div class="export-section" style="margin:0">
+            <button class="btn" id="export-pdf-btn">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="vertical-align:middle; margin-right:4px">
+                <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/>
+              </svg>
+              Export PDF
+            </button>
+          </div>
+        </div>
+        <div id="kpi-grid" class="grid kpi"></div>
+      </section>
+
+      <!-- Charts Section -->
+      <section id="charts-section" class="card hidden">
+        <h3>Visual Analytics</h3>
+        <div id="chart-grid" class="grid charts"></div>
+      </section>
+
+      <!-- Insights Section -->
+      <section id="insights-section" class="card hidden">
+        <h3>AI-Generated Insights & Recommendations</h3>
+        <ul id="insights-list" class="insights"></ul>
+      </section>
+    </div>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.20.0/dist/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script type="module" src="./clinical-data-insights.js"></script>
+</body>
+</html>

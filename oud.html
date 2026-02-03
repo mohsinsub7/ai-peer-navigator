@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>OUD Pathway Coach</title>
+<meta name="description" content="OUD Episode Engine with IET (CMS137), POD pharmacotherapy continuity, and Custom MAT-60d. Healthix handoff; enrollment-driven episodes; transfer detection; consent gating."/>
+<style>
+  :root{
+    --ink:#0f172a;--ink2:#1e293b;--accent:#2563eb;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--muted:#64748b;
+    --bg:#f6f7fb;--card:#fff;--border:#e5e7eb
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.55}
+  header{padding:18px 22px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,var(--ink),var(--ink2));color:#fff}
+  .brand{font-weight:800;letter-spacing:.25px}
+  nav{display:flex;gap:8px;flex-wrap:wrap}
+  .nav-btn{padding:8px 12px;border-radius:10px;font-weight:600;text-decoration:none;cursor:pointer;color:#e6f8f4;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.15)}
+  .nav-btn:hover,.nav-btn.active{background:#fff;color:#0f172a}
+  .container{max-width:1200px;margin:0 auto;padding:22px 16px 28px}
+  .grid{display:grid;gap:16px}
+  @media(min-width:980px){.grid-2{grid-template-columns:1.15fr .85fr}}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+  h1,h2,h3{margin:.2rem 0 .6rem}
+  h1{font-size:24px} h2{font-size:18px} h3{font-size:16px}
+  label{font-weight:600;font-size:13px;color:var(--ink2);display:block;margin:.35rem 0 .25rem}
+  input,select,textarea{width:100%;padding:.55rem .7rem;border:1px solid var(--border);border-radius:10px;font-size:14px;background:#fff}
+  textarea{min-height:70px}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .row > *{flex:1}
+  .btn{padding:.55rem .9rem;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer;font-weight:700}
+  .btn.primary{background:#0f172a;color:#fff;border-color:transparent}
+  .btn.ok{background:var(--ok);color:#fff;border-color:transparent}
+  .btn.warn{background:var(--warn);color:#111}
+  .btn.ghost{background:#fff}
+  .btn:disabled{opacity:.6;cursor:not-allowed}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:#f1f5f9;color:#0f2f29;margin-right:6px}
+  .badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:999px}
+  .badge.ok{background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0}
+  .badge.alert{background:#fef3c7;color:#92400e;border:1px solid #fcd34d}
+  .badge.err{background:#fee2e2;color:#991b1b;border:1px solid #fecaca}
+  .kpi{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .kpi .tile{background:linear-gradient(135deg,#f3f4f6,#fff);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+  .kpi .v{font-size:20px;font-weight:800}
+  .kpi .l{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+  .table{width:100%;border-collapse:collapse;margin-top:10px}
+  .table th,.table td{border:1px solid var(--border);padding:8px;font-size:13px;text-align:left;background:#fff;vertical-align:top}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,"Liberation Mono",Consolas,"Courier New",monospace}
+  .timeline{max-height:180px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:#fff;padding:8px}
+  .ledger-item{border:1px dashed #e5e7eb;border-radius:10px;padding:8px;margin:8px 0;background:#fafafa}
+  .muted{color:var(--muted)}
+  .info{display:inline-block;margin-left:6px;color:#334155;cursor:help}
+  .block-note{border:1px dashed var(--border);border-radius:10px;background:#fafcff;padding:10px;margin-top:8px}
+  .measure-head{margin-top:6px;margin-bottom:8px;line-height:1.4}
+  .due-box{margin-top:10px;border:1px solid var(--border);border-radius:10px;background:#fff;padding:10px}
+  .sp{height:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">OUD Pathway Coach</div>
+  <nav>
+    <a class="nav-btn" href="index.html">Home</a>
+    <a class="nav-btn" href="dashboard.html">Dashboard</a>
+    <a class="nav-btn active" href="oud.html">OUD Coach</a>
+    <a class="nav-btn" href="casemanagementtool.html">Case Mgmt</a>
+  </nav>
+</header>
+
+<main class="container grid grid-2">
+  <!-- LEFT: Controls & Episode Engine -->
+  <section class="card">
+    <h1>Episode Engine</h1>
+
+    <div class="row">
+      <div>
+        <label>Member ID</label>
+        <input id="m_id" placeholder="e.g., DEMO-22322" title="Each Member ID loads/saves its own timeline and episodes."/>
+      </div>
+      <div>
+        <label>Primary Agency</label>
+        <select id="m_agency" title="Default attribution if event has no agency.">
+          <option>Agency A</option>
+          <option>Tri-Center</option>
+          <option>Educational Alliance</option>
+          <option>Samaritan Daytop</option>
+          <option>Outreach</option>
+          <option value="__other">Other (type below)</option>
+        </select>
+        <input id="m_agency_other" placeholder="If Other, type agency name" style="margin-top:6px;display:none"/>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label><input id="consent_part2" type="checkbox"/> Part 2 consent on file</label></div>
+      <div><label><input id="consent_rhio" type="checkbox"/> RHIO (Healthix) consent on file</label></div>
+    </div>
+
+    <div class="kpi" style="margin:10px 0 14px">
+      <div class="tile"><div class="v" id="kpiIET">0</div><div class="l">Active IET Episodes</div></div>
+      <div class="tile"><div class="v" id="kpiPOD">0</div><div class="l">Active POD Episodes</div></div>
+      <div class="tile"><div class="v" id="kpiMAT60">0</div><div class="l">Active MAT-60d Episodes</div></div>
+      <div class="tile"><div class="v" id="kpiDue72">0</div><div class="l">Due ≤72h</div></div>
+    </div>
+
+    <h2>Add / Prefilled Events</h2>
+
+    <div id="idx_block" class="card" style="background:#fafcff">
+      <h3>SUD Index Encounter (from Dashboard / Healthix) <span class="info" title="Index used for IET and MAT-60d. Prefilled when you open from the Dashboard.">ⓘ</span></h3>
+      <div id="idx_status" class="muted" style="margin:-4px 0 8px"></div>
+      <div class="row">
+        <div><label>Date</label><input id="e_index_date" type="date" readonly/></div>
+        <div><label>Setting</label>
+          <input id="e_index_setting" readonly placeholder="ED / Inpatient / Outpatient"/>
+        </div>
+        <div><label>Diagnosis</label>
+          <input id="e_index_dx" readonly placeholder="SUD / OUD"/>
+        </div>
+        <div><label>Facility</label><input id="e_index_fac" readonly placeholder="Hospital / ED"/></div>
+      </div>
+      <div id="idx_manual" class="block-note" style="display:none">
+        If you didn’t launch from Dashboard, you can add a manual index here for demo:
+        <div class="row" style="margin-top:8px">
+          <div><label>Date</label><input id="e_index_date_m" type="date"/></div>
+          <div><label>Setting</label>
+            <select id="e_index_setting_m"><option>ED</option><option>Inpatient</option><option>Outpatient</option></select>
+          </div>
+          <div><label>Diagnosis</label>
+            <select id="e_index_dx_m"><option>SUD</option><option>OUD</option></select>
+          </div>
+          <div><label>Facility</label><input id="e_index_fac_m" placeholder="Facility"/></div>
+        </div>
+        <button class="btn primary" onclick="app.addManualIndex()">+ Add SUD_INDEX</button>
+      </div>
+    </div>
+
+    <div class="sp"></div>
+
+    <div class="card" style="background:#fffdf7">
+      <h3>MOUD Event (Medication / OTP) <span class="info" title="Counts buprenorphine fills (30d), methadone OTP service (1d per service), XR-naltrexone (30d), bupe XR (31d), bupe implant (180d).">ⓘ</span></h3>
+      <div class="row">
+        <div><label>Date</label><input id="e_moud_date" type="date"/></div>
+        <div><label>Type</label>
+          <select id="e_moud_type">
+            <option value="BUP_NDC">Buprenorphine (pharmacy fill)</option>
+            <option value="METH_OTP">Methadone (OTP daily service)</option>
+            <option value="NALT_XR">XR-Naltrexone (J2315)</option>
+            <option value="BUP_XR">Buprenorphine XR (Q9991/Q9992)</option>
+            <option value="BUP_IMPLANT">Buprenorphine Implant (J0570)</option>
+          </select>
+        </div>
+        <div><label>Agency</label><input id="e_moud_agency" placeholder="Agency ID"/></div>
+        <div><label>Coverage days (override)</label><input id="e_moud_days" type="number" min="0" placeholder="auto"/></div>
+      </div>
+      <div class="muted" style="font-size:12px">
+        Defaults: BUP_NDC=30d, METH_OTP=1d, NALT_XR=30d, BUP_XR=31d, BUP_IMPLANT=180d
+      </div>
+      <button class="btn primary" onclick="app.addMOUD()">+ Add MOUD</button>
+    </div>
+
+    <div class="sp"></div>
+
+    <div class="card" style="background:#f7fffb">
+      <h3>Program Status — from Enrollment feed <span class="info" title="Read-only periods from your Enrollment/Discharge data. Used for 60-day clean checks and transfer detection.">ⓘ</span></h3>
+      <div id="enroll_list" class="mono" style="font-size:13px"></div>
+
+      <div class="block-note">
+        <strong>Record External Enrollment</strong> (Central registry / phone from other agency)
+        <div class="row" style="margin-top:8px">
+          <div><label>Agency</label><input id="ext_agency" placeholder="New agency"/></div>
+          <div><label>Enroll date</label><input id="ext_enroll" type="date"/></div>
+          <div><label>Discharge (optional)</label><input id="ext_discharge" type="date"/></div>
+          <div><label>Source</label>
+            <select id="ext_source"><option>Central Registry</option><option>Phone from other agency</option><option>Other</option></select>
+          </div>
+        </div>
+        <div class="row"><div><label>Contact note</label><input id="ext_note" placeholder="Who confirmed, callback, etc."/></div></div>
+        <button class="btn primary" onclick="app.addExternalEnrollment()">+ Record external enrollment</button>
+      </div>
+    </div>
+
+    <div class="sp"></div>
+
+    <div class="card" style="background:#f7fbff">
+      <h3>OTP Attestation (Methadone) <span class="info" title="When OTP billing is unavailable in claims, record verified attendance. Each attested date = 1 day covered. Masked if no Part 2 consent.">ⓘ</span></h3>
+      <div class="row">
+        <div><label>Date</label><input id="e_att_date" type="date"/></div>
+        <div><label>Program</label><input id="e_att_program" placeholder="OTP Program (masked without consent)"/></div>
+        <div><label>Days Covered</label><input id="e_att_days" type="number" min="1" value="1"/></div>
+      </div>
+      <button class="btn primary" onclick="app.addAttestation()">+ Add OTP day(s)</button>
+    </div>
+
+    <div class="sp"></div>
+
+    <div class="row">
+      <button class="btn ok" onclick="app.recompute()">Recompute Episodes</button>
+      <button class="btn ghost" onclick="app.reset()">Reset Member</button>
+      <button class="btn ghost" onclick="app.exportJSON()">Export JSON</button>
+      <input type="file" id="import_file" accept=".json" style="display:none" onchange="app.importJSON(this.files[0])"/>
+      <button class="btn ghost" onclick="document.getElementById('import_file').click()">Import JSON</button>
+    </div>
+
+    <h2 style="margin-top:16px">365-Day Timeline</h2>
+    <div id="timeline" class="timeline mono"></div>
+
+    <h2 style="margin-top:16px">Evidence Ledger</h2>
+    <div id="ledger"></div>
+
+    <div class="sp"></div>
+    <h2>Generate OUD Care Note</h2>
+    <div class="row">
+      <div>
+        <label>Note format</label>
+        <select id="note_format">
+          <option value="soap">SOAP</option>
+          <option value="dap">DAP</option>
+          <option value="girp">GIRP</option>
+          <option value="apso">APSO (Assessment/Plan first)</option>
+        </select>
+      </div>
+      <div style="align-self:flex-end">
+        <button class="btn primary" onclick="app.generateCareNote()">🧠 Generate</button>
+      </div>
+    </div>
+    <div id="note_box" class="block-note" style="display:none">
+      <div id="note_text" class="mono" style="white-space:pre-wrap"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn ghost" onclick="app.copyNote()">Copy</button>
+        <button class="btn ok" onclick="app.downloadNote()">Download as Word</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGHT: Measures & Due Items -->
+  <section class="card">
+    <h2>Measures</h2>
+    <div class="row" style="align-items:center">
+      <button class="pill" onclick="app.showTab('iet')" title="IET (CMS137): 60-day clean look-back, initiation ≤14d, engagement ≤34d">IET (CMS137)</button>
+      <button class="pill" onclick="app.showTab('pod')" title="POD: New MOUD after 15-day clean; ≥180 days covered with ≤7 total gap days">POD (NCQA)</button>
+      <button class="pill" onclick="app.showTab('mat')" title="Custom MAT-60d: ≥60 days no contact/coverage, new index ⇒ initiation window 60d; transfer if another agency initiates">Custom MAT-60d</button>
+    </div>
+
+    <div id="tab_iet" class="measure-head">
+      <h3>IET — New SUD Episode <span class="info" title="Index = first SUD/OUD encounter after ≥60 days clean. Initiation ≤14 days; Engagement requires ≥2 additional contacts ≤34 days after initiation.">ⓘ</span></h3>
+      <table class="table" id="iet_tbl">
+        <thead><tr><th title="Episode #">Episode</th><th title="Index date">Index Date</th><th title="Any contact within 14d">Initiation ≤14d</th><th title="≥2 additional contacts ≤34d after initiation">Engagement ≤34d</th><th title="Overall status">Status</th><th title="Attribution / Transfer">Agency</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="tab_pod" class="measure-head" style="display:none">
+      <h3>POD — MOUD Continuity <span class="info" title="New MOUD after 15-day clean. Coverage target 180 days; ≤7 total gap days. Methadone counted via OTP service codes or attestation; XR adds fixed days.">ⓘ</span></h3>
+      <table class="table" id="pod_tbl">
+        <thead><tr><th>Episode</th><th>Start</th><th>Covered/180</th><th>Gap Days</th><th>On Track?</th><th>Attribution</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="tab_mat" class="measure-head" style="display:none">
+      <h3>Custom — MAT New Episode (60-day) <span class="info" title="If ≥60 days with no contact/coverage, then a new index opens a 60-day initiation window. Transfer if another agency initiates.">ⓘ</span></h3>
+      <table class="table" id="mat_tbl">
+        <thead><tr><th>Episode</th><th>Index</th><th>Initiation ≤60d</th><th>Transfer?</th><th>Status</th><th>Agency</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:14px">Due ≤72 hours</h2>
+    <div id="due_list" class="due-box mono" style="font-size:13px"></div>
+  </section>
+</main>
+
+<footer style="text-align:center;color:#335d57;padding:16px;font-size:12px">
+  Demo only • No PHI
+</footer>
+
+<script>
+/* ----------------------------
+   DEMO ENROLLMENTS (read-only)
+   ---------------------------- */
+const DEMO_ENROLLMENTS = {
+  "DEMO-22322":[
+    {agency:"Agency A", program:"OUD Care", enrolled:"2025-05-01", disenrolled:"2025-06-15", source:"Feed"},
+    {agency:"Agency A", program:"OUD Care", enrolled:"2025-08-01", disenrolled:null, source:"Feed"}
+  ],
+  "DEMO-001":[
+    {agency:"Agency B", program:"OUD Care", enrolled:"2025-06-01", disenrolled:null, source:"Feed"}
+  ]
+};
+
+/* ----------------------------
+   APP
+   ---------------------------- */
+const app = {
+  // Event types
+  ET: { INDEX:'SUD_INDEX', MOUD:'MOUD', PROG:'PROGRAM_STATUS', ATST:'OTP_ATTEST' },
+  // MOUD defaults
+  MOUD_DAYS:{ BUP_NDC:30, METH_OTP:1, NALT_XR:30, BUP_XR:31, BUP_IMPLANT:180 },
+
+  state: {
+    member:{ id:'', agency:'Agency A', consent_part2:false, consent_rhio:false },
+    idx:{ date:'', setting:'', dx:'', facility:'', source:'' }, // readonly when sourced
+    enrollments:[],  // read-only feed + externals
+    events:[],
+    episodes:{ iet:[], pod:[], mat:[] },
+    ledger:[]
+  },
+
+  // --- helpers ---
+  fmt(d){ if(!d) return ''; const x=new Date(d); return isNaN(x)?'':x.toISOString().slice(0,10) },
+  d(d){ return new Date((d||'')+'T00:00:00') },
+  addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x },
+  diffDays(a,b){ return Math.round((this.d(a)-this.d(b))/86400000) },
+  mask(s){ return this.state.member.consent_part2 ? (s||'—') : (s ? 'Masked (no Part 2 consent)' : '—') },
+
+  // --- dashboard handoff ---
+  loadFromDashboard(){
+    try{
+      const sel = sessionStorage.getItem('selectedMemberId');
+      if(sel){ document.getElementById('m_id').value = sel; }
+      const raw = sessionStorage.getItem('oudIndexPayload');
+      if(!raw) return false;
+      const p = JSON.parse(raw);
+      if(p.memberId){ document.getElementById('m_id').value = p.memberId; }
+      this.state.idx = {
+        date: this.fmt(p.indexDate), setting: p.setting||'ED', dx: p.dx||'OUD',
+        facility: p.facility||'Hospital/ED', source:'Healthix'
+      };
+      this.renderIndexBlock(true);
+      this.log(`INDEX prefilled from Dashboard/Healthix: ${this.state.idx.date} ${this.state.idx.setting} ${this.state.idx.dx} @ ${this.state.idx.facility}`);
+      return true;
+    }catch(e){ return false; }
+  },
+
+  // --- localStorage per member ---
+  storageKey(id){ return `oud_state:${id}` },
+  loadMember(id){
+    const k = this.storageKey(id);
+    const saved = localStorage.getItem(k);
+    if(saved){
+      this.state = JSON.parse(saved);
+    }else{
+      // initialize default
+      this.state = {
+        member:{ id, agency: 'Agency A', consent_part2:false, consent_rhio:true },
+        idx:{ date:'', setting:'', dx:'', facility:'', source:'' },
+        enrollments: (DEMO_ENROLLMENTS[id] ? [...DEMO_ENROLLMENTS[id]] : []),
+        events:[],
+        episodes:{ iet:[], pod:[], mat:[] },
+        ledger:[]
+      };
+    }
+    this.renderAll();
+  },
+  save(){ localStorage.setItem(this.storageKey(this.state.member.id), JSON.stringify(this.state)); },
+
+  // --- enrollment handling ---
+  isEnrolledOn(date){
+    const d = this.d(date);
+    return this.state.enrollments.some(e=>{
+      const start = this.d(e.enrolled);
+      const end = e.disenrolled ? this.d(e.disenrolled) : null;
+      return d >= start && (!end || d <= end);
+    });
+  },
+  addExternalEnrollment(){
+    const agency = document.getElementById('ext_agency').value.trim();
+    const enrolled = document.getElementById('ext_enroll').value;
+    const disenrolled = document.getElementById('ext_discharge').value || null;
+    const source = document.getElementById('ext_source').value;
+    const note = document.getElementById('ext_note').value.trim();
+    if(!agency || !enrolled){ alert('Agency and enroll date are required'); return; }
+    this.state.enrollments.push({ agency, program:'OUD Care', enrolled, disenrolled, source:(source||'External'), note });
+    this.log(`External enrollment recorded: ${agency} (${enrolled}${disenrolled?(' → '+disenrolled):''}) via ${source}${note?(' — '+note):''}`);
+    this.recompute();
+  },
+
+  // --- UI index block ---
+  renderIndexBlock(locked){
+    const s = this.state.idx;
+    const have = !!s.date;
+    document.getElementById('e_index_date').value = s.date||'';
+    document.getElementById('e_index_setting').value = s.setting||'';
+    document.getElementById('e_index_dx').value = s.dx||'';
+    document.getElementById('e_index_fac').value = s.facility||'';
+    document.getElementById('idx_status').textContent = have ? `Prefilled from ${s.source||'Dashboard'}` : `No Dashboard index detected. Add a demo index below.`;
+    document.getElementById('idx_manual').style.display = have ? 'none' : 'block';
+  },
+  addManualIndex(){
+    const date = document.getElementById('e_index_date_m').value;
+    const setting = document.getElementById('e_index_setting_m').value;
+    const dx = document.getElementById('e_index_dx_m').value;
+    const facility = document.getElementById('e_index_fac_m').value || 'Facility';
+    if(!date){ alert('Date required'); return; }
+    this.state.idx = { date:this.fmt(date), setting, dx, facility, source:'Manual (demo)' };
+    this.renderIndexBlock(true);
+    this.log(`Manual INDEX added: ${this.state.idx.date} ${setting} ${dx} @ ${facility}`);
+  },
+
+  // --- add events ---
+  addMOUD(){
+    const date = document.getElementById('e_moud_date').value;
+    const mtype = document.getElementById('e_moud_type').value;
+    const agency = document.getElementById('e_moud_agency').value || this.state.member.agency || 'Unknown';
+    const override = parseInt(document.getElementById('e_moud_days').value||'0',10);
+    if(!date){ alert('Date required'); return; }
+    const days = override>0 ? override : (this.MOUD_DAYS[mtype]||1);
+    this.state.events.push({ type:this.ET.MOUD, date:this.fmt(date), mtype, agency, days });
+    this.log(`MOUD ${mtype} +${days}d @ ${this.fmt(date)} (${agency})`);
+    this.recompute();
+  },
+  addAttestation(){
+    const date = document.getElementById('e_att_date').value;
+    const program = document.getElementById('e_att_program').value || 'OTP (attested)';
+    const days = parseInt(document.getElementById('e_att_days').value||'1',10);
+    if(!date){ alert('Date required'); return; }
+    this.state.events.push({ type:this.ET.ATST, date:this.fmt(date), program, days });
+    this.log(`OTP ATTEST ${program} +${days}d @ ${this.fmt(date)}`);
+    this.recompute();
+  },
+
+  // --- recompute episodes ---
+  recompute(){
+    // sync member header
+    const idInput = document.getElementById('m_id').value.trim();
+    if(idInput && idInput!==this.state.member.id){ this.loadMember(idInput); return; }
+    this.state.member.id = idInput||this.state.member.id||'DEMO-22322';
+    const agSel = document.getElementById('m_agency').value;
+    const agOther = document.getElementById('m_agency_other').value.trim();
+    this.state.member.agency = (agSel==='__other' ? (agOther||'Other') : agSel);
+    this.state.member.consent_part2 = document.getElementById('consent_part2').checked;
+    this.state.member.consent_rhio  = document.getElementById('consent_rhio').checked;
+
+    // Ensure events sorted
+    this.state.events.sort((a,b)=> this.d(a.date)-this.d(b.date));
+
+    // Coverage days from MOUD/attestations
+    const coverage = new Set();
+    const addCov = (start, days)=>{ for(let i=0;i<days;i++){ coverage.add(this.fmt(this.addDays(this.d(start), i))); } };
+    for(const e of this.state.events){
+      if(e.type===this.ET.MOUD) addCov(e.date, e.days);
+      if(e.type===this.ET.ATST) addCov(e.date, e.days);
+    }
+
+    // Contact days (index or MOUD/OTP)
+    const contact = new Set();
+    if(this.state.idx.date) contact.add(this.state.idx.date);
+    for(const e of this.state.events){
+      if(e.type===this.ET.MOUD || e.type===this.ET.ATST) contact.add(e.date);
+    }
+
+    // --- IET ---
+    const iet=[];
+    if(this.state.idx.date){
+      const idx = this.state.idx.date; const idxAgency = this.state.member.agency;
+      // clean 60d: no contact + (optionally) not enrolled (we treat as AND/OR clean)
+      let clean=true;
+      for(let i=1;i<=60;i++){ if(contact.has(this.fmt(this.addDays(this.d(idx), -i)))) { clean=false; break; } }
+      // Initiation ≤14d (any contact)
+      let initiation=null, initiationAgency=null;
+      for(let i=1;i<=14;i++){
+        const day=this.fmt(this.addDays(this.d(idx), i));
+        if(contact.has(day)){ initiation=day; const ev = this.state.events.find(ev=>ev.date===day); initiationAgency = ev?.agency || idxAgency; break; }
+      }
+      // Engagement ≤34d after initiation: ≥2 additional contacts
+      let engaged=false;
+      if(initiation){
+        let hits=0;
+        for(let i=1;i<=34;i++){ const day=this.fmt(this.addDays(this.d(initiation), i)); if(contact.has(day)) hits++; if(hits>=2){ engaged=true; break; } }
+      }
+      iet.push({
+        index:idx, initiation, engaged,
+        status: initiation ? (engaged?'Initiated + Engaged':'Initiated (needs engagement)') : 'No initiation',
+        initiationAgency: initiationAgency||idxAgency,
+        transfer: initiation && initiationAgency && initiationAgency!==idxAgency
+      });
+      this.log(`IET: index=${idx} clean60=${clean} init=${initiation||'—'} engaged=${engaged}`);
+    }
+
+    // --- POD ---
+    const pod=[];
+    const moud = this.state.events.filter(e=>e.type===this.ET.MOUD || e.type===this.ET.ATST).sort((a,b)=>this.d(a.date)-this.d(b.date));
+    const hasOn = (day)=> coverage.has(this.fmt(day));
+    for(let i=0;i<moud.length;i++){
+      const e = moud[i]; const start=e.date;
+      // 15d clean lookback (no coverage)
+      let prior=false; for(let j=1;j<=15;j++){ if(hasOn(this.addDays(this.d(start), -j))) { prior=true; break; } }
+      if(prior) continue;
+      // 180d window
+      let covered=0, gapDays=0;
+      for(let j=0;j<180;j++){ const day=this.fmt(this.addDays(this.d(start), j)); if(coverage.has(day)) covered++; else gapDays++; }
+      const onTrack = gapDays<=7;
+      pod.push({ start, covered, gapDays, onTrack, attribution: e.agency||this.state.member.agency||'Unknown' });
+      this.log(`POD: ${start} covered=${covered}/180 gaps=${gapDays} onTrack=${onTrack}`);
+    }
+
+    // --- MAT-60d (custom) ---
+    const mat=[];
+    if(this.state.idx.date){
+      const idx = this.state.idx.date; const idxAgency = this.state.member.agency;
+      // ≥60d with NO contact OR being disenrolled ≥60d prior
+      let cleanContact=true; for(let i=1;i<=60;i++){ if(contact.has(this.fmt(this.addDays(this.d(idx), -i)))) { cleanContact=false; break; } }
+      // disenrolled ≥60d prior?
+      let noProgram60=true;
+      for(let i=1;i<=60;i++){ const day=this.fmt(this.addDays(this.d(idx), -i)); if(this.isEnrolledOn(day)){ noProgram60=false; break; } }
+      if(cleanContact || noProgram60){
+        let initiation=null, initAgency=null;
+        for(let i=1;i<=60;i++){
+          const day=this.fmt(this.addDays(this.d(idx), i));
+          if(contact.has(day)){ initiation=day; const ev=this.state.events.find(ev=>ev.date===day); initAgency=ev?.agency||idxAgency; break; }
+        }
+        const transfer = initiation && initAgency && initAgency!==idxAgency;
+        mat.push({ index:idx, initiation, transfer, agency:idxAgency, status: initiation?'Initiated':'No initiation' });
+        this.log(`MAT-60d: index=${idx} clean=${cleanContact||noProgram60} init=${initiation||'—'} transfer=${transfer}`);
+      }
+    }
+
+    this.state.episodes = { iet, pod, mat };
+    this.renderAll();
+    this.save();
+  },
+
+  // --- rendering ---
+  renderAll(){
+    // Header inputs
+    document.getElementById('m_id').value = this.state.member.id||'';
+    const sel = document.getElementById('m_agency');
+    const idx = Array.from(sel.options).findIndex(o=>o.value===this.state.member.agency || o.text===this.state.member.agency);
+    if(idx>=0){ sel.selectedIndex = idx; document.getElementById('m_agency_other').style.display='none'; }
+    else { sel.value='__other'; document.getElementById('m_agency_other').style.display='block'; document.getElementById('m_agency_other').value=this.state.member.agency; }
+    document.getElementById('consent_part2').checked = !!this.state.member.consent_part2;
+    document.getElementById('consent_rhio').checked  = !!this.state.member.consent_rhio;
+
+    // Index block
+    this.renderIndexBlock(!!this.state.idx.date);
+
+    // Enrollments
+    const list = this.state.enrollments.slice().sort((a,b)=>this.d(a.enrolled)-this.d(b.enrolled)).map(e=>{
+      const range = `${e.enrolled} ${e.disenrolled?('→ '+e.disenrolled):'(active)'}`;
+      const src = e.source||'Feed';
+      return `• ${this.mask(e.agency)} — ${e.program||'Program'} — ${range} [${src}]`;
+    }).join('<br/>') || '(no enrollment periods found)';
+    document.getElementById('enroll_list').innerHTML = list;
+
+    // KPIs & Due
+    const due = this.computeDue72();
+    document.getElementById('kpiIET').textContent  = this.state.episodes.iet.filter(x=>!x.initiation||!x.engaged).length;
+    document.getElementById('kpiPOD').textContent  = this.state.episodes.pod.filter(x=>!x.onTrack).length;
+    document.getElementById('kpiMAT60').textContent= this.state.episodes.mat.filter(x=>!x.initiation).length;
+    document.getElementById('kpiDue72').textContent= due.length;
+
+    // Tables
+    this.fillIET(); this.fillPOD(); this.fillMAT(); this.fillDue(due);
+
+    // Timeline
+    const tl=[];
+    if(this.state.idx.date){ tl.push(`📍 ${this.state.idx.date}  INDEX ${this.state.idx.dx}/${this.state.idx.setting}  @ ${this.mask(this.state.idx.facility)} [${this.state.idx.source||'Dashboard'}]`); }
+    for(const e of this.state.events){
+      if(e.type===this.ET.MOUD)  tl.push(`💊 ${e.date}  MOUD ${e.mtype} (+${e.days}d)  @ ${this.mask(e.agency||'—')}`);
+      if(e.type===this.ET.ATST)  tl.push(`✅ ${e.date}  OTP ATTEST ${this.mask(e.program)} (+${e.days}d)`);
+    }
+    document.getElementById('timeline').textContent = tl.join('\n');
+
+    // Ledger
+    document.getElementById('ledger').innerHTML = this.state.ledger.map(x=>`<div class="ledger-item mono">${x}</div>`).join('');
+
+    // Show IET tab by default
+    this.showTab(window.__activeTab||'iet');
+  },
+
+  fillIET(){
+    const tb=document.querySelector('#iet_tbl tbody'); tb.innerHTML='';
+    this.state.episodes.iet.forEach((ep,i)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td>#${i+1}</td>
+        <td>${ep.index||'—'}</td>
+        <td>${ep.initiation||'<span class="muted">—</span>'}</td>
+        <td>${ep.initiation?(ep.engaged?'✅':'⏳'):'<span class="muted">—</span>'}</td>
+        <td>${ep.status} ${ep.transfer?'<span class="badge alert" title="Initiation performed by another agency inside the live window">Transfer</span>':''}</td>
+        <td>${this.mask(ep.initiationAgency||this.state.member.agency)}</td>`;
+      tb.appendChild(tr);
+    });
+  },
+  fillPOD(){
+    const tb=document.querySelector('#pod_tbl tbody'); tb.innerHTML='';
+    this.state.episodes.pod.forEach((ep,i)=>{
+      const tr=document.createElement('tr');
+      const ok = ep.onTrack ? '<span class="badge ok">On track</span>' : '<span class="badge err" title=">7 total gap days in 180d window">At risk</span>';
+      tr.innerHTML=`
+        <td>#${i+1}</td>
+        <td>${ep.start}</td>
+        <td>${ep.covered}/180</td>
+        <td>${ep.gapDays}</td>
+        <td>${ok}</td>
+        <td>${this.mask(ep.attribution)}</td>`;
+      tb.appendChild(tr);
+    });
+  },
+  fillMAT(){
+    const tb=document.querySelector('#mat_tbl tbody'); tb.innerHTML='';
+    this.state.episodes.mat.forEach((ep,i)=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td>#${i+1}</td>
+        <td>${ep.index}</td>
+        <td>${ep.initiation || '<span class="badge err">Overdue</span>'}</td>
+        <td>${ep.transfer?'<span class="badge alert">Yes</span>':'No'}</td>
+        <td>${ep.status}</td>
+        <td>${this.mask(ep.agency)}</td>`;
+      tb.appendChild(tr);
+    });
+  },
+
+  computeDue72(){
+    const out=[];
+    for(const ep of this.state.episodes.iet){
+      if(!ep.initiation){
+        const due = this.addDays(this.d(ep.index),14);
+        const diff=(due - new Date())/86400000;
+        if(diff>=0 && diff<=3) out.push(`IET init due by ${this.fmt(due)} (index ${ep.index})`);
+      }else if(!ep.engaged){
+        const due = this.addDays(this.d(ep.initiation),34);
+        const diff=(due - new Date())/86400000;
+        if(diff>=0 && diff<=3) out.push(`IET engagement due by ${this.fmt(due)} (init ${ep.initiation})`);
+      }
+    }
+    for(const ep of this.state.episodes.mat){
+      if(!ep.initiation){
+        const due = this.addDays(this.d(ep.index),60);
+        const diff=(due - new Date())/86400000;
+        if(diff>=0 && diff<=3) out.push(`MAT-60d initiation due by ${this.fmt(due)} (index ${ep.index})`);
+      }
+    }
+    for(const ep of this.state.episodes.pod){
+      if(!ep.onTrack) out.push(`POD gap risk for episode start ${ep.start} (gaps ${ep.gapDays})`);
+    }
+    return out;
+  },
+  fillDue(items){
+    const box=document.getElementById('due_list');
+    box.innerHTML = items.length? items.map(s=>`• ${s}`).join('<br/>') : '(none)';
+  },
+
+  showTab(which){ window.__activeTab=which;
+    document.getElementById('tab_iet').style.display = which==='iet'?'block':'none';
+    document.getElementById('tab_pod').style.display = which==='pod'?'block':'none';
+    document.getElementById('tab_mat').style.display = which==='mat'?'block':'none';
+  },
+
+  // --- ledger ---
+  log(msg){ this.state.ledger.unshift(`[${new Date().toISOString()}] ${msg}`); },
+
+  // --- reset & import/export ---
+  reset(){
+    const id=this.state.member.id||'DEMO-22322';
+    localStorage.removeItem(this.storageKey(id));
+    this.loadMember(id);
+  },
+  exportJSON(){
+    const blob=new Blob([JSON.stringify(this.state,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=`oud_state_${this.state.member.id||'member'}_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  },
+  importJSON(file){
+    const fr=new FileReader();
+    fr.onload=()=>{ try{ const obj=JSON.parse(fr.result); this.state=obj; this.renderAll(); this.save(); }catch(e){ alert('Invalid JSON'); } };
+    fr.readAsText(file);
+  },
+
+  // --- Clinical note generation ---
+  async generateCareNote(){
+    const fmtSel=document.getElementById('note_format').value;
+    const apso = (fmtSel==='apso'); const template = apso ? 'soap' : fmtSel;
+
+    // Build a redacted text summary for the LLM
+    const epi=this.state.episodes, idx=this.state.idx;
+    const consent = `Part2=${this.state.member.consent_part2?'yes':'no'}, RHIO=${this.state.member.consent_rhio?'yes':'no'}`;
+    const due = this.computeDue72().join('; ');
+    const lines=[];
+    if(idx.date){ lines.push(`Index: ${idx.date} ${idx.setting} dx=${idx.dx} facility=${this.mask(idx.facility)}.`); }
+    if(epi.iet[0])  lines.push(`IET: init=${epi.iet[0].initiation||'none'} engaged=${epi.iet[0].engaged?'yes':'no'} transfer=${epi.iet[0].transfer?'yes':'no'}.`);
+    if(epi.mat[0])  lines.push(`MAT60: init=${epi.mat[0].initiation||'none'} transfer=${epi.mat[0].transfer?'yes':'no'}.`);
+    if(epi.pod[0])  lines.push(`POD: start=${epi.pod[0].start} covered=${epi.pod[0].covered}/180 gaps=${epi.pod[0].gapDays}.`);
+    if(due)        lines.push(`DueSoon: ${due}.`);
+    lines.push(`Consent: ${consent}.`);
+    const redacted_text = lines.join(' ');
+
+    // Minimal codes/tags (can be extended)
+    const codes=[{code:'F11.20',title:'Opioid use disorder'}]; const tags=['OUD','MOUD','IET','POD','MAT60'];
+
+    // Call Netlify function
+    try{
+      const res = await fetch('/.netlify/functions/generate-note',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({template,redacted_text,codes,tags})});
+      const data = await res.json();
+      let noteStr='';
+      if(data && data.sections){
+        const sec = (s)=> (data.sections[s]||'').trim();
+        if(template==='soap'){
+          if(apso){
+            noteStr = `ASSESSMENT:\n${sec('assessment')}\n\nPLAN:\n${sec('plan')}\n\nSUBJECTIVE:\n${sec('subjective')}\n\nOBJECTIVE:\n${sec('objective')}`;
+          }else{
+            noteStr = `SUBJECTIVE:\n${sec('subjective')}\n\nOBJECTIVE:\n${sec('objective')}\n\nASSESSMENT:\n${sec('assessment')}\n\nPLAN:\n${sec('plan')}`;
+          }
+        }else if(template==='dap'){
+          noteStr = `DATA:\n${sec('data')}\n\nASSESSMENT:\n${sec('assessment')}\n\nPLAN:\n${sec('plan')}`;
+        }else{ // girp
+          noteStr = `GOAL:\n${sec('goal')}\n\nINTERVENTION:\n${sec('intervention')}\n\nRESPONSE:\n${sec('response')}\n\nPLAN:\n${sec('plan')}`;
+        }
+      }else{
+        noteStr = this.localCareNote(template, apso);
+      }
+      this.showNote(noteStr);
+    }catch(e){
+      this.showNote(this.localCareNote(template, apso));
+    }
+  },
+  localCareNote(template, apso){
+    const epi=this.state.episodes, idx=this.state.idx;
+    const subj = idx.date? `Client presented ${idx.setting} on ${idx.date} with ${idx.dx}.` : 'Client under OUD care coordination.';
+    const obj  = `Timeline reviewed. IET init: ${epi.iet[0]?.initiation||'none'}; engage: ${epi.iet[0]?.engaged?'yes':'no'}. POD: ${epi.pod[0]?`${epi.pod[0].covered}/180 covered, gaps ${epi.pod[0].gapDays}`:'n/a'}. MAT60 init: ${epi.mat[0]?.initiation||'none'}.`;
+    const a    = `OUD with care gaps. Transfers: ${epi.iet[0]?.transfer?'yes':'no'}. Barriers include access/continuity.`
+    const p    = `Follow-up within 7 days; coordinate MOUD continuity; close loops on transfers; monitor gaps ≤7 days; outreach per Part 2 consent.`
+    if(template==='soap'){
+      if(apso) return `ASSESSMENT:\n${a}\n\nPLAN:\n${p}\n\nSUBJECTIVE:\n${subj}\n\nOBJECTIVE:\n${obj}`;
+      return `SUBJECTIVE:\n${subj}\n\nOBJECTIVE:\n${obj}\n\nASSESSMENT:\n${a}\n\nPLAN:\n${p}`;
+    }else if(template==='dap'){
+      return `DATA:\n${subj}\n\nASSESSMENT:\n${a}\n\nPLAN:\n${p}`;
+    }else{
+      return `GOAL:\nStabilize OUD care and initiate/maintain MOUD.\n\nINTERVENTION:\nCare coordination, transfer management, outreach.\n\nRESPONSE:\nEngaged; agrees to plan.\n\nPLAN:\n${p}`;
+    }
+  },
+  showNote(text){
+    document.getElementById('note_text').textContent = `Client: [CLIENT_NAME]\nDOB: [DOB]\nDate: [DATE]\nLocation: [LOCATION]\n\n${text}`;
+    document.getElementById('note_box').style.display='block';
+  },
+  copyNote(){ navigator.clipboard.writeText(document.getElementById('note_text').textContent) },
+  downloadNote(){
+    const content=document.getElementById('note_text').textContent;
+    const html=`<html><head><meta charset='utf-8'></head><body style='font-family:Arial;font-size:12pt;line-height:1.6;'>${content.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('')}</body></html>`;
+    const blob=new Blob(['\ufeff',html],{type:'application/msword'}); const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=`oud_care_note_${(this.state.member.id||'member')}.doc`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  },
+
+  // --- init ---
+  init(){
+    // agency dropdown “Other”
+    document.getElementById('m_agency').addEventListener('change',e=>{
+      document.getElementById('m_agency_other').style.display = e.target.value==='__other' ? 'block' : 'none';
+    });
+
+    // Load member from query or dashboard or default
+    const urlParams=new URLSearchParams(location.search);
+    const qId=urlParams.get('memberId');
+    if(qId){ document.getElementById('m_id').value=qId; }
+    const hadHandoff=this.loadFromDashboard();
+    const mId=document.getElementById('m_id').value||'DEMO-22322';
+    this.loadMember(mId);
+    if(hadHandoff){ this.save(); }
+  }
+};
+
+document.addEventListener('DOMContentLoaded',()=> app.init());
+</script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Instant Insights — XLSX Loader Patch</title>
+
+  <!-- Primary (official) SheetJS CDN: 0.20.3 -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
+
+  <script>
+  // Fallback loader: if the primary script 404s or fails to attach window.XLSX,
+  // dynamically load a widely mirrored build from unpkg.
+  (function() {
+    function loadFallback() {
+      const s = document.createElement('script');
+      s.src = "https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js";
+      s.defer = true;
+      s.onload = function(){ console.log("[XLSX] Fallback loaded:", typeof window.XLSX); };
+      s.onerror = function(){ console.error("[XLSX] Fallback failed to load"); };
+      document.head.appendChild(s);
+    }
+    // If XLSX is still missing by DOMContentLoaded, pull fallback
+    document.addEventListener('DOMContentLoaded', function(){
+      if (typeof window.XLSX === "undefined") {
+        console.warn("[XLSX] Primary CDN not available; loading fallback …");
+        loadFallback();
+      }
+    });
+  })();
+  </script>
+
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0b1220;color:#e8eefc;margin:0}
+    .wrap{max-width:960px;margin:40px auto;padding:24px}
+    .card{background:#111a2f;border:1px solid #1f2b4a;border-radius:12px;padding:20px}
+    code{background:#1a233a;padding:2px 6px;border-radius:6px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Instant Insights — XLSX Loader Patch</h1>
+    <div class="card">
+      <p>This file ensures the XLSX library is present even if one CDN path 404s.</p>
+      <ul>
+        <li>Primary: <code>cdn.sheetjs.com xlsx-0.20.3</code></li>
+        <li>Fallback: <code>unpkg xlsx@0.18.5</code></li>
+      </ul>
+      <p>Open the browser console and check <code>typeof XLSX</code>. It should be <code>"object"</code>.</p>
+    </div>
+  </div>
+</body>
+</html>

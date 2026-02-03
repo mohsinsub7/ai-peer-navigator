@@ -1,0 +1,22 @@
+{
+  "name": "mental-health-ai-insights",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "@netlify/blobs": "^8.2.0",
+    "google-auth-library": "^9.6.0"
+  },
+  "scripts": {
+    "dev": "netlify dev",
+    "build": "netlify build",
+    "start": "netlify dev"
+  },
+  "devDependencies": {
+    "xlsx": "^0.18.5"
+  }
+}

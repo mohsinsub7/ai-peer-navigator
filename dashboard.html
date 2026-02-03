@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Network Dashboard & Reporting (Demo v2)</title>
+<style>
+:root{
+  --brand-bg:#f6f7fb;
+  --brand-text:#0f172a;
+  --brand-primary:#0f172a;
+  --brand-secondary:#1e293b;
+  --brand-accent:#2563eb;
+  --brand-border:#e5e7eb;
+  --brand-card:#ffffff;
+  --good:#16a34a;
+  --warn:#ca8a04;
+  --bad:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--brand-bg);color:var(--brand-text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+header{background:var(--brand-primary);color:#fff;padding:18px 24px;display:flex;align-items:center;justify-content:space-between}
+header h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.3px}
+header .sub{opacity:.9;font-size:12px}
+main{max-width:1200px;margin:20px auto;padding:0 16px}
+.nav{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:var(--brand-card);border:1px solid var(--brand-border);padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--brand-secondary)}
+.tab.active{background:#0f172a;color:#fff;border-color:#0f172a}
+.card{background:var(--brand-card);border:1px solid var(--brand-border);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:1000px){.grid{grid-template-columns:1fr}}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:center;justify-content:space-between}
+.controls-left{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.controls-right{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,input[type="date"]{border:1px solid var(--brand-border);border-radius:10px;padding:8px 10px;background:#fff}
+.btn{border:1px solid var(--brand-border);padding:8px 12px;border-radius:10px;background:#111827;color:#fff;cursor:pointer}
+.btn.ghost{background:#fff;color:#111;border-color:var(--brand-border)}
+.kpi{display:flex;gap:12px;flex-wrap:wrap}
+.kpi .tile{flex:1;min-width:220px;border:1px solid var(--brand-border);border-radius:12px;padding:12px;background:#fff}
+.kpi .tile h3{margin:0 0 6px 0;font-size:13px;color:#334155}
+.kpi .tile .num{font-size:24px;font-weight:800}
+.small{font-size:12px;color:#64748b}
+.bar{display:flex;align-items:flex-end;gap:10px;height:160px;border-bottom:1px solid var(--brand-border);padding-bottom:10px;margin-top:8px}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.col .barrect{width:100%;max-width:40px;background:linear-gradient(180deg,var(--brand-accent),#93c5fd);border-radius:8px 8px 0 0;transition:.2s}
+.col .label{margin-top:6px;font-size:12px;color:#475569;text-align:center}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#475569;margin-top:8px}
+.badge{display:inline-flex;align-items:center;gap:6px}
+.dot{width:10px;height:10px;border-radius:50%}
+.dot.inp{background:#1d4ed8}
+.dot.ed{background:#f59e0b}
+.tblwrap{overflow:auto;border:1px solid var(--brand-border);border-radius:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;border-bottom:1px solid var(--brand-border);font-size:14px}
+th{background:#f8fafc;text-align:left;color:#334155;position:sticky;top:0}
+tr:hover td{background:#f9fafb}
+.searchrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center;justify-content:space-between}
+.search-left{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.search-right{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+input[type="text"].search{padding:8px 10px;border:1px solid var(--brand-border);border-radius:10px}
+.status{font-size:12px;padding:2px 8px;border-radius:999px;display:inline-block}
+.status.bad{background:#fee2e2;color:#991b1b}
+.status.warn{background:#fef9c3;color:#854d0e}
+.status.good{background:#dcfce7;color:#166534}
+.link{color:var(--brand-accent);cursor:pointer}
+.footer{font-size:12px;color:#64748b;text-align:center;margin:22px 0}
+.notice{background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;padding:8px 12px;border-radius:10px;margin-bottom:10px}
+/* Feature switcher in header (right side) */
+.features{display:flex;gap:8px;flex-wrap:wrap}
+.pill{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#eaf8f4;padding:8px 12px;border-radius:10px;text-decoration:none;font-weight:600}
+.pill:hover,.pill.active{background:#fff;color:#0f2f29}
+/* Quick Pathway widgets */
+.quick{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.quick select{min-width:220px}
+.action-btn{border:1px solid var(--brand-border);background:#0f2f29;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer}
+.action-btn.link{background:transparent;color:#2563eb;border:none;text-decoration:underline;padding:0}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Network Dashboard & Reporting — Demo v2</h1>
+    <div class="sub">Dummy data • Local-only • No PHI</div>
+  </div>
+  <div class="features">
+    <a class="pill" href="index.html">Home</a>
+    <a class="pill active" href="dashboard.html">Dashboard</a>
+    <a class="pill" href="casemanagementtool.html">Case Mgmt</a>
+    <a class="pill" href="oud.html">OUD Pathway</a>
+  </div>
+</header>
+<main>
+  <div class="nav">
+    <div class="tab active" data-tab="overview">Overview</div>
+    <div class="tab" data-tab="encounters">Encounters</div>
+    <div class="tab" data-tab="quality">Quality Measures</div>
+  </div>
+
+  <!-- OVERVIEW TAB -->
+  <section id="overview" class="card">
+    <div class="controls">
+      <div class="controls-left">
+        <select id="agencyFilter"></select>
+        <select id="boroughFilter"></select>
+        <select id="rangeFilter">
+          <option value="30">Last 30 days</option>
+          <option value="60">Last 60 days</option>
+          <option value="90" selected>Last 90 days</option>
+        </select>
+        <button class="btn ghost" id="resetFilters">Reset filters</button>
+      </div>
+      <div class="controls-right">
+        <div class="small" style="opacity:.8">Quick Pathway:</div>
+        <div class="quick">
+          <select id="quickMember"></select>
+          <button class="action-btn" id="quickOpen">Open Pathway</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpi" id="kpiRow"></div>
+
+    <div class="grid">
+      <div class="card">
+        <h2 style="margin:0 0 6px 0">Inpatient & ED Volume by Borough</h2>
+        <div class="small">Click a column to drill into the patient list</div>
+        <div class="bar" id="barBorough"></div>
+        <div class="legend">
+          <span class="badge"><span class="dot inp"></span>Inpatient</span>
+          <span class="badge"><span class="dot ed"></span>ED</span>
+        </div>
+      </div>
+      <div class="card">
+        <h2 style="margin:0 0 6px 0">Active Enrollments by Program</h2>
+        <div class="small">Dummy breakdown; illustrates program mix</div>
+        <div id="progMix" class="bar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ENCOUNTERS TAB -->
+  <section id="encounters" class="card" style="display:none">
+    <h2 style="margin:0 0 8px 0">Patient Drill-down — Inpatient & ED</h2>
+    <div class="searchrow">
+      <div class="search-left">
+        <input id="searchPatient" class="search" type="text" placeholder="Search name, ID, facility…">
+      </div>
+      <div class="search-right">
+        <button class="btn ghost" id="exportEncCSV">Export CSV</button>
+      </div>
+    </div>
+    <div class="tblwrap">
+      <table id="encTable">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>ID</th>
+            <th>Agency</th>
+            <th>Borough</th>
+            <th>Type</th>
+            <th>Admit</th>
+            <th>Discharge</th>
+            <th>Facility</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- QUALITY TAB -->
+  <section id="quality" class="card" style="display:none">
+    <div class="notice">Measures shown are PSYCKES-style demos using dummy data. Click a tile or percentage to drill into members who did <strong>not</strong> meet the measure.</div>
+    <div class="controls">
+      <div class="controls-left">
+        <div>
+          <label class="small">FU Window</label>
+          <select id="fuWindow">
+            <option value="7">7-day</option>
+            <option value="30" selected>30-day</option>
+          </select>
+        </div>
+        <div>
+          <label class="small">MAT Window</label>
+          <select id="matWindow">
+            <option value="14" selected>14-day</option>
+            <option value="30">30-day</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="kpi">
+      <div class="tile" id="kpiNoFU">
+        <h3>No Follow-Up after OUD Inpatient (window)</h3>
+        <div class="num" id="noFURate">--%</div>
+        <div class="small" id="noFUCounts">-- of -- discharges</div>
+        <div class="small"><span class="link" id="viewNoFU">View patients</span></div>
+      </div>
+      <div class="tile" id="kpiNoMAT">
+        <h3>MAT No Initiation (within window)</h3>
+        <div class="num" id="noMATRate">--%</div>
+        <div class="small" id="noMATCounts">-- of -- eligible</div>
+        <div class="small"><span class="link" id="viewNoMAT">View patients</span></div>
+      </div>
+    </div>
+
+    <div class="card" id="qualDrill" style="display:none;margin-top:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 id="qualTitle" style="margin:0">Drill-down</h3>
+        <button class="btn ghost" id="exportQualCSV">Export CSV</button>
+      </div>
+      <div class="tblwrap" style="margin-top:10px">
+        <table id="qualTable">
+          <thead>
+            <tr>
+              <th>Patient</th>
+              <th>ID</th>
+              <th>Agency</th>
+              <th>Borough</th>
+              <th>Index Event</th>
+              <th>Index Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="footer">Demo only • Dummy data • No PHI</div>
+</main>
+
+<script>
+// ------------------ Dummy Data Generation ------------------
+const AGENCIES = ["Agency A","Agency B","Odyssey House","Project Renewal","S:US","ACMH"];
+const BOROUGHS = ["Bronx","Brooklyn","Manhattan","Queens","Staten Island"];
+const FACILITIES = ["NYC Health + Hospitals/Kings County","Mount Sinai Beth Israel","NYU Langone","Lincoln Hospital","Elmhurst Hospital","Metropolitan Hospital"];
+
+function rand(arr){return arr[Math.floor(Math.random()*arr.length)]}
+function randint(a,b){return Math.floor(Math.random()*(b-a+1))+a}
+function randDate(daysBack=90){
+  const now = new Date();
+  const past = new Date(now.getTime() - randint(0,daysBack)*86400000);
+  past.setHours(randint(7,18), randint(0,59), 0, 0);
+  return past;
+}
+function fmt(dt){return dt.toISOString().slice(0,10)+" "+dt.toTimeString().slice(0,5)}
+
+const patients = Array.from({length:120}).map((_,i)=>{
+  const first = ["Alex","Maria","Jordan","Samuel","Aisha","Fatima","Luis","Diana","Chen","Viktor","Noor","Sofia","Omar","Jamal","Elena","Mark","Jenny","Pavel","Natasha","Hassan"][randint(0,19)];
+  const last  = ["Rivera","Williams","Chen","Brown","Khan","Ali","Garcia","Johnson","Lopez","Davis","Martinez","Lee","Taylor","Thomas","Jackson","Rodriguez","Hernandez","Moore","Martin","Thompson"][randint(0,19)];
+  return {
+    id:"P"+String(10000+i),
+    name:first+" "+last,
+    agency: rand(AGENCIES),
+    borough: rand(BOROUGHS),
+    // Flags for OUD and MAT eligibility (mock)
+    oudEligible: Math.random()<0.35,
+    matEligible: Math.random()<0.30
+  }
+});
+
+// Encounters: inpatient/ED within 90 days
+const encounters = [];
+patients.forEach(p=>{
+  const nIP = randint(0,2);
+  for(let k=0;k<nIP;k++){
+    const admit = randDate(90);
+    const dc = new Date(admit.getTime()+randint(1,6)*86400000);
+    encounters.push({person:p, type:"Inpatient", admit, discharge:dc, facility:rand(FACILITIES)});
+  }
+  const nED = randint(0,3);
+  for(let k=0;k<nED;k++){
+    const admit = randDate(90);
+    const dc = new Date(admit.getTime()+randint(0,1)*3600000*randint(1,6));
+    encounters.push({person:p, type:"ED", admit, discharge:dc, facility:rand(FACILITIES)});
+  }
+});
+
+// Index events for OUD inpatient (subset of inpatients with oudEligible)
+const oudDischarges = encounters
+  .filter(e=>e.type==="Inpatient" && e.person.oudEligible)
+  .slice(0,40) // limit for demo
+  .map(e=>({person:e.person, index:"OUD Inpatient Discharge", indexDate:e.discharge}));
+
+// Simulate follow-ups (some missing within windows)
+const followups = oudDischarges.map(d=>{
+  const hasFU = Math.random()<0.62;
+  let fuDate = null;
+  if(hasFU){
+    fuDate = new Date(d.indexDate.getTime()+randint(1,25)*86400000);
+  }
+  return {person:d.person, indexDate:d.indexDate, fuDate};
+});
+
+// MAT initiation cohort (subset of matEligible)
+const matCohort = patients.filter(p=>p.matEligible).slice(0,50).map(p=>{
+  const indexDate = randDate(60);
+  const started = Math.random()<0.55;
+  let startDate = null;
+  if(started){ startDate = new Date(indexDate.getTime()+randint(1,20)*86400000); }
+  return {person:p, index:"MAT Eligible", indexDate, startDate};
+});
+
+// ------------------ State & Filters ------------------
+const state = {
+  agency:"All agencies",
+  borough:"All boroughs",
+  range:90,
+  fuWindow:30,
+  matWindow:14
+};
+
+function initFilters(){
+  const agencySel = document.getElementById('agencyFilter');
+  const boroughSel = document.getElementById('boroughFilter');
+  agencySel.innerHTML = `<option>All agencies</option>` + AGENCIES.map(a=>`<option>${a}</option>`).join("");
+  boroughSel.innerHTML = `<option>All boroughs</option>` + BOROUGHS.map(b=>`<option>${b}</option>`).join("");
+  document.getElementById('rangeFilter').value = String(state.range);
+  agencySel.onchange = (e)=>{state.agency=e.target.value; renderAll();}
+  boroughSel.onchange = (e)=>{state.borough=e.target.value; renderAll();}
+  document.getElementById('rangeFilter').onchange = (e)=>{state.range=Number(e.target.value); renderAll();}
+  document.getElementById('resetFilters').onclick = ()=>{
+    state.agency="All agencies"; state.borough="All boroughs"; state.range=90;
+    initFilters(); renderAll();
+  };
+
+  document.getElementById('fuWindow').value = String(state.fuWindow);
+  document.getElementById('matWindow').value = String(state.matWindow);
+  document.getElementById('fuWindow').onchange = (e)=>{state.fuWindow=Number(e.target.value); renderQuality();}
+  document.getElementById('matWindow').onchange = (e)=>{state.matWindow=Number(e.target.value); renderQuality();}
+
+  // Quick Pathway select
+  const quickSel = document.getElementById('quickMember');
+  quickSel.innerHTML = patients.map(p=>`<option value="${p.id}">${p.name} — ${p.agency}</option>`).join('');
+  document.getElementById('quickOpen').onclick = ()=>{
+    const pid = quickSel.value || patients[0].id;
+    openPathway(pid);
+  };
+}
+
+function inRange(dt){ const now=new Date(); const diff=(now-dt)/86400000; return diff<=state.range; }
+function matchAgency(p){ return state.agency==="All agencies" || p.agency===state.agency; }
+function matchBorough(p){ return state.borough==="All boroughs" || p.borough===state.borough; }
+
+function filteredEncounters(){
+  return encounters.filter(e=>inRange(e.admit) && matchAgency(e.person) && matchBorough(e.person));
+}
+
+// ------------------ Overview Rendering ------------------
+function renderKPIs(){
+  const enc = filteredEncounters();
+  const inpatient = enc.filter(e=>e.type==="Inpatient").length;
+  const ed = enc.filter(e=>e.type==="ED").length;
+  const unique = new Set(enc.map(e=>e.person.id)).size;
+
+  const kpi = document.getElementById('kpiRow');
+  kpi.innerHTML = `
+    <div class="tile">
+      <h3>Total encounters (last ${state.range}d)</h3>
+      <div class="num">${enc.length}</div>
+      <div class="small">Unique patients: ${unique}</div>
+    </div>
+    <div class="tile">
+      <h3>Inpatient</h3>
+      <div class="num" style="color:#1d4ed8">${inpatient}</div>
+      <div class="small">Share: ${enc.length?Math.round(inpatient/enc.length*100):0}%</div>
+    </div>
+    <div class="tile">
+      <h3>ED</h3>
+      <div class="num" style="color:#f59e0b">${ed}</div>
+      <div class="small">Share: ${enc.length?Math.round(ed/enc.length*100):0}%</div>
+    </div>
+    <div class="tile">
+      <h3>Filters</h3>
+      <div class="small">Agency: <strong>${state.agency}</strong></div>
+      <div class="small">Borough: <strong>${state.borough}</strong></div>
+      <div class="small">Window: <strong>Last ${state.range} days</strong></div>
+    </div>
+  `;
+}
+
+function renderBarBorough(){
+  const enc = filteredEncounters();
+  const byB = BOROUGHS.map(b=>{
+    const list = enc.filter(e=>e.person.borough===b);
+    return {
+      b,
+      ip:list.filter(e=>e.type==="Inpatient").length,
+      ed:list.filter(e=>e.type==="ED").length,
+      total:list.length
+    };
+  });
+  const max = Math.max(1,...byB.map(x=>x.total));
+  const container = document.getElementById('barBorough');
+  container.innerHTML = "";
+  byB.forEach(row=>{
+    const col = document.createElement('div');
+    col.className = 'col';
+    const ipH = Math.round((row.ip/max)*140)+4;
+    const edH = Math.round((row.ed/max)*140)+4;
+    const stack = document.createElement('div');
+    stack.style.display="grid";
+    stack.style.gridTemplateRows=`${edH}px ${ipH}px`;
+    stack.style.alignItems="end";
+    stack.style.width="40px";
+    stack.style.cursor="pointer";
+    const edBar = document.createElement('div');
+    edBar.className="barrect";
+    edBar.style.background="linear-gradient(180deg,#f59e0b,#fde68a)";
+    edBar.style.height=edH+"px";
+    const ipBar = document.createElement('div');
+    ipBar.className="barrect";
+    ipBar.style.background="linear-gradient(180deg,#1d4ed8,#93c5fd)";
+    ipBar.style.height=ipH+"px";
+    stack.appendChild(edBar);
+    stack.appendChild(ipBar);
+    stack.title = `${row.b}: ED ${row.ed}, Inpatient ${row.ip}`;
+    stack.onclick = ()=> openEncountersDrill({borough:row.b});
+    const label = document.createElement('div');
+    label.className="label";
+    label.textContent=row.b;
+    col.appendChild(stack);
+    col.appendChild(label);
+    container.appendChild(col);
+  });
+}
+
+function renderProgMix(){
+  const container = document.getElementById('progMix');
+  const programs = [
+    {name:"Care Mgmt", v: randint(30,60)},
+    {name:"Outpatient SUD", v: randint(20,50)},
+    {name:"MH Clinic", v: randint(25,55)},
+    {name:"ACT/FACT", v: randint(10,30)},
+    {name:"Housing", v: randint(15,35)}
+  ];
+  const max = Math.max(...programs.map(p=>p.v));
+  container.innerHTML = "";
+  programs.forEach(p=>{
+    const col = document.createElement('div');
+    col.className="col";
+    const h = Math.round((p.v/max)*140)+6;
+    const bar = document.createElement('div');
+    bar.className="barrect";
+    bar.style.height=h+"px";
+    bar.style.background="linear-gradient(180deg,#0ea5e9,#93c5fd)";
+    bar.title=`${p.name}: ${p.v}`;
+    const label = document.createElement('div');
+    label.className="label";
+    label.textContent=p.name;
+    col.appendChild(bar);
+    col.appendChild(label);
+    container.appendChild(col);
+  });
+}
+
+function renderOverview(){
+  renderKPIs();
+  renderBarBorough();
+  renderProgMix();
+}
+
+// ------------------ Encounters Drill-down ------------------
+function openEncountersDrill(filter={}){
+  // switch tab
+  setTab('encounters');
+  // populate table
+  const tbody = document.querySelector('#encTable tbody');
+  const enc = filteredEncounters().filter(e=>{
+    if(filter.borough && e.person.borough!==filter.borough) return false;
+    if(filter.type && e.type!==filter.type) return false;
+    return true;
+  });
+  tbody.innerHTML = enc.map(e=>`
+    <tr>
+      <td>${e.person.name}</td>
+      <td>${e.person.id}</td>
+      <td>${e.person.agency}</td>
+      <td>${e.person.borough}</td>
+      <td>${e.type}</td>
+      <td>${fmt(e.admit)}</td>
+      <td>${fmt(e.discharge)}</td>
+      <td>${e.facility}</td>
+      <td><button class="action-btn link" onclick="openPathway('${e.person.id}')">Open Pathway</button></td>
+    </tr>
+  `).join("");
+  document.getElementById('searchPatient').value="";
+}
+
+document.getElementById('searchPatient').addEventListener('input', (e)=>{
+  const q = e.target.value.toLowerCase();
+  const rows = document.querySelectorAll('#encTable tbody tr');
+  rows.forEach(r=>{
+    r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
+  });
+});
+
+document.getElementById('exportEncCSV').onclick = ()=>{
+  const rows = Array.from(document.querySelectorAll('#encTable tr'));
+  const csv = rows.map(r=>Array.from(r.children).map(td=>`"${td.innerText.replace(/"/g,'""')}"`).join(",")).join("\n");
+  downloadFile("Encounters.csv", csv);
+};
+
+// ------------------ Quality Measures ------------------
+function computeNoFU(windowDays){
+  // members with oud discharge and no FU within window
+  const now = new Date();
+  const inWindow = followups.filter(f=>{
+    const ageDays = (now - f.indexDate)/86400000;
+    return ageDays<=90; // bound cohort to last 90d
+  });
+  const denom = inWindow.length;
+  const failures = inWindow.filter(f=>{
+    if(!f.fuDate) return true;
+    const delta = (f.fuDate - f.indexDate)/86400000;
+    return delta>windowDays;
+  });
+  return {denom, num: failures.length, list: failures};
+}
+
+function computeNoMAT(windowDays){
+  const now = new Date();
+  const cohort = matCohort.filter(m=> (now - m.indexDate)/86400000 <= 90);
+  const denom = cohort.length;
+  const failures = cohort.filter(m=>{
+    if(!m.startDate) return true;
+    const delta = (m.startDate - m.indexDate)/86400000;
+    return delta>windowDays;
+  });
+  return {denom, num: failures.length, list: failures};
+}
+
+function renderQuality(){
+  const fu = computeNoFU(state.fuWindow);
+  const mat = computeNoMAT(state.matWindow);
+  const fuPct = fu.denom? Math.round((fu.num/fu.denom)*100):0;
+  const matPct = mat.denom? Math.round((mat.num/mat.denom)*100):0;
+
+  document.getElementById('noFURate').textContent = fuPct + "%";
+  document.getElementById('noFUCounts').textContent = `${fu.num} of ${fu.denom} discharges (window: ${state.fuWindow}d)`;
+  document.getElementById('noMATRate').textContent = matPct + "%";
+  document.getElementById('noMATCounts').textContent = `${mat.num} of ${mat.denom} eligible (window: ${state.matWindow}d)`;
+
+  document.getElementById('viewNoFU').onclick = ()=> showQualDrill(`No Follow-Up after OUD Inpatient — ${state.fuWindow}d`, fu.list, (row)=>{
+    const status = !row.fuDate ? 'No follow-up' : `FU at ${Math.round((row.fuDate-row.indexDate)/86400000)}d`;
+    return `<tr>
+      <td>${row.person.name}</td>
+      <td>${row.person.id}</td>
+      <td>${row.person.agency}</td>
+      <td>${row.person.borough}</td>
+      <td>OUD Discharge</td>
+      <td>${row.indexDate.toISOString().slice(0,10)}</td>
+      <td><span class="status ${!row.fuDate?'bad':'warn'}">${status}</span></td>
+      <td><button class="action-btn link" onclick="openPathway('${row.person.id}')">Open Pathway</button></td>
+    </tr>`;
+  });
+
+  document.getElementById('viewNoMAT').onclick = ()=> showQualDrill(`MAT No Initiation — ${state.matWindow}d`, mat.list, (row)=>{
+    const status = !row.startDate ? 'No MAT start' : `Start at ${Math.round((row.startDate-row.indexDate)/86400000)}d`;
+    return `<tr>
+      <td>${row.person.name}</td>
+      <td>${row.person.id}</td>
+      <td>${row.person.agency}</td>
+      <td>${row.person.borough}</td>
+      <td>MAT Eligible</td>
+      <td>${row.indexDate.toISOString().slice(0,10)}</td>
+      <td><span class="status ${!row.startDate?'bad':'warn'}">${status}</span></td>
+      <td><button class="action-btn link" onclick="openPathway('${row.person.id}')">Open Pathway</button></td>
+    </tr>`;
+  });
+}
+
+function showQualDrill(title, list, rowRenderer){
+  document.getElementById('qualTitle').innerText = title + " — failing members";
+  const tbody = document.querySelector('#qualTable tbody');
+  tbody.innerHTML = list.map(rowRenderer).join("");
+  document.getElementById('qualDrill').style.display = "";
+}
+
+document.getElementById('exportQualCSV').onclick = ()=>{
+  const rows = Array.from(document.querySelectorAll('#qualTable tr'));
+  const csv = rows.map(r=>Array.from(r.children).map(td=>`"${td.innerText.replace(/"/g,'""')}"`).join(",")).join("\n");
+  downloadFile("QualityDrill.csv", csv);
+};
+
+// ------------------ Utilities ------------------
+function setTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===name));
+  document.querySelectorAll('section').forEach(s=>s.style.display = 'none');
+  document.getElementById(name).style.display = '';
+}
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick = ()=> setTab(t.dataset.tab);
+});
+
+function downloadFile(filename, text){
+  const blob = new Blob([text], {type:"text/csv"});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// Map P-ids to demo M-ids so OUD page opens with a valid member id
+const M_IDS = ["M1001","M1002","M1003","M1004","M1005"];
+function mapToMemberId(pid){
+  const n = parseInt(String(pid).replace(/\D/g,''),10) || 0;
+  return M_IDS[n % M_IDS.length];
+}
+function openPathway(pid){
+  const mid = mapToMemberId(pid);
+  location.href = `oud.html?memberId=${encodeURIComponent(mid)}`;
+}
+
+// ------------------ Init ------------------
+function renderAll(){
+  renderOverview();
+  renderQuality();
+}
+initFilters();
+renderAll();
+</script>
+</body>
+</html>
