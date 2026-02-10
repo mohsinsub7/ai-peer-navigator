@@ -284,6 +284,9 @@
       background: #f0fdf4;
       border: 2px solid #86efac;
     }
+    .message.assistant .message-content.screening-complete-output {
+      max-width: 90%;
+    }
     .screening-complete-header {
       display: flex;
       align-items: center;
@@ -303,6 +306,102 @@
     }
     .screening-result-body strong {
       color: #166534;
+    }
+
+    /* ── TWO-PANEL SCREENING RESULT LAYOUT ── */
+    .screening-result-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .screening-summary-panel {
+      background: #fff;
+      border: 1px solid #d1fae5;
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .screening-summary-panel .score-box {
+      text-align: center;
+      padding: 14px 12px;
+      background: #dcfce7;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .screening-summary-panel .score-value {
+      font-size: 32px;
+      font-weight: 800;
+      color: #166534;
+      line-height: 1;
+    }
+    .screening-summary-panel .score-max {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 4px;
+    }
+    .screening-summary-panel .severity-label {
+      text-align: center;
+      font-weight: 700;
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .severity-severe { background: #fee2e2; color: #991b1b; }
+    .severity-moderate { background: #fef3c7; color: #92400e; }
+    .severity-mild { background: #e0f2fe; color: #075985; }
+    .severity-minimal { background: #f0fdf4; color: #166534; }
+    .screening-summary-panel .recommendation-text {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #374151;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 8px;
+      margin-top: 8px;
+    }
+    .screening-responses-panel {
+      max-height: 380px;
+      overflow-y: auto;
+      font-size: 12px;
+      line-height: 1.5;
+      padding-right: 6px;
+    }
+    .screening-responses-panel::-webkit-scrollbar { width: 5px; }
+    .screening-responses-panel::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    .screening-responses-panel .responses-title {
+      font-weight: 700;
+      font-size: 13px;
+      margin-bottom: 8px;
+      color: #1e40af;
+    }
+    .screening-responses-panel .response-item {
+      padding: 5px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .screening-responses-panel .response-item:last-child { border-bottom: none; }
+    .screening-responses-panel .q-text {
+      color: #6b7280;
+      font-size: 11px;
+    }
+    .screening-responses-panel .a-text {
+      font-weight: 600;
+      color: #1e40af;
+      font-size: 12px;
+    }
+    .screening-safety-alert {
+      background: #fef2f2;
+      border: 2px solid #ef4444;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-top: 12px;
+      font-weight: 700;
+      color: #991b1b;
+      font-size: 13px;
+    }
+    @media (max-width: 768px) {
+      .screening-result-layout { grid-template-columns: 1fr; }
+      .screening-responses-panel { max-height: 250px; }
+      .message.assistant .message-content.screening-complete-output { max-width: 95%; }
     }
 
     /* ── REFERRAL EMAIL STYLES ── */
@@ -1044,23 +1143,80 @@
           announceToScreenReader(`Screening question ${prog.questionNumber} of ${prog.totalQuestions}`);
 
         } else if (isScreeningComplete) {
-          // Render screening result with copy and summary
+          // Render screening result with structured two-panel layout
           const result = data.screeningResult || {};
-          // Store the result for PDF download
           window._lastScreeningResult = result;
+
+          // Determine severity CSS class
+          let sevClass = 'severity-minimal';
+          const sevLower = (result.severity || '').toLowerCase();
+          if (/severe|high|probable|positive|dependence|harmful/.test(sevLower)) sevClass = 'severity-severe';
+          else if (/moderate|borderline|hazardous/.test(sevLower)) sevClass = 'severity-moderate';
+          else if (/mild/.test(sevLower)) sevClass = 'severity-mild';
 
           let completeHtml = `<div class="message-content screening-complete-output">`;
           completeHtml += `<div class="screening-complete-header">
-            <span>📋 ${result.formName || 'Screening'} — Complete</span>
+            <span>${escapeHtml(result.formName || 'Screening')} — Complete</span>
             <div>
               <button class="copy-btn" onclick="downloadScreeningPDF()" style="margin-right:6px;">Download PDF</button>
               <button class="copy-btn" onclick="copyNote(this)">Copy Results</button>
             </div>
           </div>`;
-          completeHtml += `<div class="screening-result-body">${parseMarkdown(responseText)}</div>`;
 
+          // Two-panel grid layout
+          completeHtml += `<div class="screening-result-layout">`;
+
+          // Left panel: Score summary card
+          completeHtml += `<div class="screening-summary-panel">`;
+          completeHtml += `<div class="score-box"><div class="score-value">${result.score}</div><div class="score-max">out of ${result.maxScore}</div></div>`;
+          completeHtml += `<div class="severity-label ${sevClass}">${escapeHtml(result.severity || 'N/A')}</div>`;
+          if (result.zone) {
+            completeHtml += `<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:6px;">Risk Zone: ${escapeHtml(result.zone)}</div>`;
+          }
+          if (result.clusters) {
+            completeHtml += `<div style="font-size:11px;color:#374151;margin-bottom:6px;">
+              <div style="font-weight:700;margin-bottom:3px;">PTSD Clusters:</div>
+              <div>B Intrusion: ${result.clusters.intrusion ?? '—'}</div>
+              <div>C Avoidance: ${result.clusters.avoidance ?? '—'}</div>
+              <div>D Neg. Cognition: ${result.clusters.negativeCognition ?? '—'}</div>
+              <div>E Arousal: ${result.clusters.arousal ?? '—'}</div>
+            </div>`;
+            if (result.provisionalDiagnosis !== undefined) {
+              const dxStyle = result.provisionalDiagnosis ? 'color:#991b1b;font-weight:700' : 'color:#166534';
+              completeHtml += `<div style="font-size:11px;${dxStyle};margin-bottom:6px;">Provisional Dx: ${result.provisionalDiagnosis ? 'YES' : 'No'}</div>`;
+            }
+          }
+          if (result.injectionRisk) {
+            completeHtml += `<div style="font-size:11px;color:#991b1b;font-weight:700;margin-bottom:6px;">⚠ Injection Drug Use Reported</div>`;
+          }
+          if (result.recommendation) {
+            completeHtml += `<div class="recommendation-text">${escapeHtml(result.recommendation)}</div>`;
+          }
+          completeHtml += `</div>`;
+
+          // Right panel: Response summary (scrollable)
+          completeHtml += `<div class="screening-responses-panel">`;
+          completeHtml += `<div class="responses-title">Response Summary</div>`;
+          if (result.questions && result.responses) {
+            result.questions.forEach((q, i) => {
+              const label = result.responseLabels ? result.responseLabels[i] : '';
+              const score = result.responses[i] != null ? result.responses[i] : '?';
+              completeHtml += `<div class="response-item">`;
+              completeHtml += `<div class="q-text">${i + 1}. ${escapeHtml(q)}</div>`;
+              completeHtml += `<div class="a-text">${escapeHtml(label || 'Score: ' + score)} (${score})</div>`;
+              completeHtml += `</div>`;
+            });
+          } else {
+            // Fallback to markdown if structured data not available
+            completeHtml += `<div class="screening-result-body">${parseMarkdown(responseText)}</div>`;
+          }
+          completeHtml += `</div>`;
+
+          completeHtml += `</div>`; // end screening-result-layout
+
+          // Safety alert (full-width below both panels)
           if (result.suicidalIdeation || result.selfHarmFlag || result.acute) {
-            completeHtml += `<div class="crisis-header" style="margin-top:12px;"><span>⚠️ SAFETY FLAG — Review Immediately</span></div>`;
+            completeHtml += `<div class="screening-safety-alert">⚠ SAFETY FLAG — Immediate Review Required. Conduct safety assessment immediately. Consider referral to mental health professional and medication evaluation.</div>`;
           }
 
           completeHtml += `</div>`;

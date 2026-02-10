@@ -9,6 +9,27 @@ const H = {
   "access-control-allow-headers": "Content-Type"
 };
 
+// Sanitize text for WinAnsi encoding (Latin-1) compatibility with pdf-lib StandardFonts.
+// StandardFonts.Helvetica only supports characters in the WinAnsi (Latin-1) code page.
+// Any character outside this range (em-dash, curly quotes, emoji, etc.) will cause
+// pdf-lib to throw an encoding error. This function replaces them with safe ASCII equivalents.
+function sanitizeForPDF(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/\u2014/g, '--')        // em-dash
+    .replace(/\u2013/g, '-')         // en-dash
+    .replace(/\u2018|\u2019/g, "'")  // curly single quotes
+    .replace(/\u201C|\u201D/g, '"')  // curly double quotes
+    .replace(/\u2026/g, '...')       // ellipsis
+    .replace(/\u2022/g, '-')         // bullet
+    .replace(/\u2023/g, '>')         // triangular bullet
+    .replace(/\u00A0/g, ' ')         // non-breaking space
+    .replace(/[\u2700-\u27BF]/g, '') // dingbats
+    .replace(/[\uFE00-\uFE0F]/g, '') // variation selectors
+    .replace(/[\u{1F300}-\u{1F9FF}]/gu, '') // emoji (symbols, emoticons, etc.)
+    .replace(/[^\x00-\xFF]/g, '?');  // catch-all: replace any remaining non-Latin-1 chars
+}
+
 export default async function handler(req) {
   if (req.method === "OPTIONS") {
     return new Response("", { status: 204, headers: H });
@@ -38,7 +59,7 @@ export default async function handler(req) {
     });
 
   } catch (error) {
-    console.error("[SCREENING-PDF] Error:", error);
+    console.error("[SCREENING-PDF] Error:", error.message, error.stack);
     return new Response(JSON.stringify({ error: "Failed to generate PDF", details: error.message }), {
       status: 500, headers: H
     });
@@ -78,10 +99,16 @@ async function generateScreeningPDF(result) {
     if (y < MARGIN + needed) addPage();
   }
 
+  // All text passed to drawText is sanitized for WinAnsi encoding
   function drawText(text, x, size, color, usedFont) {
     checkPageBreak();
-    page.drawText(text, { x, y, size, font: usedFont || font, color: color || BLACK });
+    page.drawText(sanitizeForPDF(text), { x, y, size, font: usedFont || font, color: color || BLACK });
     y -= LINE_H;
+  }
+
+  // Safe wrapper for direct page.drawText calls (used for positioned text outside the helper)
+  function safeDrawText(text, options) {
+    page.drawText(sanitizeForPDF(text), options);
   }
 
   function drawLine(x1, x2) {
@@ -90,13 +117,13 @@ async function generateScreeningPDF(result) {
 
   // ── HEADER ──
   page.drawRectangle({ x: 0, y: PAGE_H - 80, width: PAGE_W, height: 80, color: DARK_BLUE });
-  page.drawText(result.formName || result.formId, {
+  safeDrawText(result.formName || result.formId, {
     x: MARGIN, y: PAGE_H - 40, size: 16, font: fontBold, color: rgb(1, 1, 1)
   });
-  page.drawText('Behavioral Health Screening Assessment', {
+  safeDrawText('Behavioral Health Screening Assessment', {
     x: MARGIN, y: PAGE_H - 58, size: 10, font: fontItalic, color: rgb(0.7, 0.8, 1)
   });
-  page.drawText(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, {
+  safeDrawText(`Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`, {
     x: PAGE_W - MARGIN - 180, y: PAGE_H - 40, size: 9, font: font, color: rgb(0.8, 0.8, 0.9)
   });
 
@@ -117,8 +144,8 @@ async function generateScreeningPDF(result) {
 
   for (const [label, value] of infoFields) {
     checkPageBreak();
-    page.drawText(label, { x: MARGIN, y, size: 9, font: fontBold, color: GRAY });
-    page.drawText(value, { x: MARGIN + 120, y, size: 9, font: font, color: BLACK });
+    safeDrawText(label, { x: MARGIN, y, size: 9, font: fontBold, color: GRAY });
+    safeDrawText(value, { x: MARGIN + 120, y, size: 9, font: font, color: BLACK });
     y -= LINE_H;
   }
 
@@ -133,21 +160,21 @@ async function generateScreeningPDF(result) {
   checkPageBreak(50);
   const scoreBoxY = y - 35;
   page.drawRectangle({ x: MARGIN, y: scoreBoxY, width: 150, height: 40, color: rgb(0.93, 0.95, 1), borderColor: ACCENT, borderWidth: 1 });
-  page.drawText('TOTAL SCORE', { x: MARGIN + 10, y: scoreBoxY + 25, size: 8, font: fontBold, color: ACCENT });
-  page.drawText(`${result.score} / ${result.maxScore}`, { x: MARGIN + 10, y: scoreBoxY + 7, size: 16, font: fontBold, color: DARK_BLUE });
+  safeDrawText('TOTAL SCORE', { x: MARGIN + 10, y: scoreBoxY + 25, size: 8, font: fontBold, color: ACCENT });
+  safeDrawText(`${result.score} / ${result.maxScore}`, { x: MARGIN + 10, y: scoreBoxY + 7, size: 16, font: fontBold, color: DARK_BLUE });
 
   // Severity box
   const sevColor = /severe|high|probable|positive|dependence|harmful/i.test(result.severity) ? RED :
                    /moderate|borderline|hazardous/i.test(result.severity) ? rgb(0.7, 0.5, 0) : GREEN;
   page.drawRectangle({ x: MARGIN + 170, y: scoreBoxY, width: PAGE_W - 2 * MARGIN - 170, height: 40, color: rgb(0.97, 0.97, 0.97), borderColor: sevColor, borderWidth: 1 });
-  page.drawText('SEVERITY', { x: MARGIN + 180, y: scoreBoxY + 25, size: 8, font: fontBold, color: sevColor });
+  safeDrawText('SEVERITY', { x: MARGIN + 180, y: scoreBoxY + 25, size: 8, font: fontBold, color: sevColor });
   // Wrap severity text if long
-  const sevText = result.severity || 'N/A';
+  const sevText = sanitizeForPDF(result.severity || 'N/A');
   if (sevText.length > 55) {
-    page.drawText(sevText.substring(0, 55), { x: MARGIN + 180, y: scoreBoxY + 12, size: 9, font: fontBold, color: sevColor });
-    page.drawText(sevText.substring(55), { x: MARGIN + 180, y: scoreBoxY + 2, size: 9, font: fontBold, color: sevColor });
+    safeDrawText(sevText.substring(0, 55), { x: MARGIN + 180, y: scoreBoxY + 12, size: 9, font: fontBold, color: sevColor });
+    safeDrawText(sevText.substring(55), { x: MARGIN + 180, y: scoreBoxY + 2, size: 9, font: fontBold, color: sevColor });
   } else {
-    page.drawText(sevText, { x: MARGIN + 180, y: scoreBoxY + 7, size: 10, font: fontBold, color: sevColor });
+    safeDrawText(sevText, { x: MARGIN + 180, y: scoreBoxY + 7, size: 10, font: fontBold, color: sevColor });
   }
 
   y = scoreBoxY - 15;
@@ -173,7 +200,7 @@ async function generateScreeningPDF(result) {
     }
     if (result.provisionalDiagnosis !== undefined) {
       const dxColor = result.provisionalDiagnosis ? RED : GREEN;
-      drawText(`    Provisional PTSD Diagnosis: ${result.provisionalDiagnosis ? 'YES — meets DSM-5 criteria' : 'No — does not meet full criteria'}`, MARGIN, 9, dxColor, fontBold);
+      drawText(`    Provisional PTSD Diagnosis: ${result.provisionalDiagnosis ? 'YES -- meets DSM-5 criteria' : 'No -- does not meet full criteria'}`, MARGIN, 9, dxColor, fontBold);
     }
   }
 
@@ -184,13 +211,13 @@ async function generateScreeningPDF(result) {
   drawLine(MARGIN, PAGE_W - MARGIN);
   y -= 4;
 
-  // Word-wrap recommendation text
-  const recText = result.recommendation || 'No recommendation available.';
+  // Word-wrap recommendation text (sanitize first)
+  const recText = sanitizeForPDF(result.recommendation || 'No recommendation available.');
   const maxCharsPerLine = 85;
   const recLines = wrapText(recText, maxCharsPerLine);
   for (const line of recLines) {
     checkPageBreak();
-    page.drawText(line, { x: MARGIN, y, size: 9, font: font, color: BLACK });
+    safeDrawText(line, { x: MARGIN, y, size: 9, font: font, color: BLACK });
     y -= LINE_H;
   }
 
@@ -200,7 +227,7 @@ async function generateScreeningPDF(result) {
   if (result.suicidalIdeation || result.selfHarmFlag || result.acute || result.injectionRisk) {
     checkPageBreak(40);
     page.drawRectangle({ x: MARGIN, y: y - 25, width: PAGE_W - 2 * MARGIN, height: 30, color: rgb(1, 0.92, 0.92), borderColor: RED, borderWidth: 1.5 });
-    page.drawText('⚠ SAFETY ALERT — Immediate Review Required', {
+    safeDrawText('[!] SAFETY ALERT -- Immediate Review Required', {
       x: MARGIN + 10, y: y - 15, size: 10, font: fontBold, color: RED
     });
     y -= 40;
@@ -217,17 +244,17 @@ async function generateScreeningPDF(result) {
     for (let i = 0; i < result.questions.length; i++) {
       checkPageBreak(30);
 
-      // Question number + text
-      const qText = `${i + 1}. ${result.questions[i]}`;
+      // Question number + text (sanitized for WinAnsi)
+      const qText = sanitizeForPDF(`${i + 1}. ${result.questions[i]}`);
       const qLines = wrapText(qText, 75);
       for (const line of qLines) {
-        page.drawText(line, { x: MARGIN, y, size: 8, font: font, color: GRAY });
+        safeDrawText(line, { x: MARGIN, y, size: 8, font: font, color: GRAY });
         y -= LINE_H - 2;
       }
 
-      // Answer
-      const answer = result.responseLabels?.[i] || `Score: ${result.responses[i]}`;
-      page.drawText(`    → ${answer}  (${result.responses[i]})`, { x: MARGIN, y, size: 9, font: fontBold, color: DARK_BLUE });
+      // Answer (sanitized for WinAnsi)
+      const answer = sanitizeForPDF(result.responseLabels?.[i] || `Score: ${result.responses[i]}`);
+      safeDrawText(`    > ${answer}  (${result.responses[i]})`, { x: MARGIN, y, size: 9, font: fontBold, color: DARK_BLUE });
       y -= LINE_H + 2;
     }
   }
@@ -244,7 +271,7 @@ async function generateScreeningPDF(result) {
   drawText('Supervisor Signature: ___________________________    Date: ____________', MARGIN, 9, BLACK, font);
 
   y -= 20;
-  page.drawText('Generated by AI Peer Navigator — This document is for clinical use only. Verify all information.', {
+  safeDrawText('Generated by AI Peer Navigator -- This document is for clinical use only. Verify all information.', {
     x: MARGIN, y: Math.max(y, 30), size: 7, font: fontItalic, color: GRAY
   });
 

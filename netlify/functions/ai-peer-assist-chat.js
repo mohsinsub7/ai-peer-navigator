@@ -1128,6 +1128,7 @@ Example:
 - You MUST ONLY use information from: (1) the search results provided below, (2) the conversation history, and (3) the core peer support knowledge embedded in these instructions.
 - If a question falls outside your data, say: "I don't have specific information about that in my knowledge base. Please consult your supervisor or check with your agency's clinical team."
 - NEVER generate agency names, addresses, or phone numbers that are NOT in the search results. If you don't have a matching resource, say so honestly and suggest calling 311 or NYC Well (1-888-692-9355).
+- When presenting agency contact details (address, phone, hours), ONLY use data from the "VERIFIED RESOURCES FROM NYC AGENCY DIRECTORY" section. The "GUIDELINES" section may mention agencies but those addresses may be outdated. The structured directory is the single source of truth for contact information.
 - NEVER provide clinical diagnoses, prescribe medications, or give medical advice.
 - If search results are empty or irrelevant, be transparent: "I couldn't find matching resources in my directory for that specific need."
 - You are an AI assistant for Peer Navigators ONLY — never interact as if the client is present.
@@ -1191,8 +1192,9 @@ Review the FULL conversation above. Extract all clinically relevant information 
 3. Be OBJECTIVE - describe behaviors, not interpretations ("client was pacing and speaking loudly" not "client was angry")
 4. Stay in your lane - you are a PEER SPECIALIST, not a clinician. Do NOT diagnose.
 5. Use [CLIENT_NAME] as placeholder for the client name.
-6. Include relevant ICD-10 Z-codes for documented social determinants when applicable.
-7. The note should be COPY-PASTE READY for the chart - no extra commentary or guidance.
+6. Do NOT include ICD-10 codes, diagnostic codes, or billing codes of any kind. Peer Specialists do not diagnose or assign codes — this is outside the scope of peer support practice.
+7. Do NOT add barriers, diagnoses, social determinants, or clinical details that were NOT explicitly discussed in the conversation. Only document what was actually said or observed.
+8. The note should be COPY-PASTE READY for the chart - no extra commentary or guidance.
 
 ## FORMAT: %%FORMAT%%
 
@@ -1208,7 +1210,7 @@ const FORMAT_TEMPLATES = {
 
 **O - Objective:** Observable facts. Client's appearance, behavior, affect, engagement level. Services/resources accessed. Measurable data.
 
-**A - Assessment:** Peer specialist's assessment of the situation. Barriers identified with ICD-10 Z-codes. Progress toward goals. Risk level (low/moderate/high).
+**A - Assessment:** Peer specialist's assessment of the situation. Barriers identified. Progress toward goals. Risk level (low/moderate/high).
 
 **P - Plan:** Specific next steps. Follow-up date/time. Referrals made. Resources to be contacted. Client's agreed-upon actions.`,
 
@@ -1216,7 +1218,7 @@ const FORMAT_TEMPLATES = {
 
 **D - Data:** All relevant information gathered during the session. Client statements, behaviors observed, barriers discussed, interventions used, resources provided.
 
-**A - Assessment:** Peer specialist's assessment of client progress, barriers (with ICD-10 Z-codes), engagement level, and risk factors.
+**A - Assessment:** Peer specialist's assessment of client progress, barriers, engagement level, and risk factors.
 
 **P - Plan:** Concrete next steps, follow-up timeline, referrals, and client commitments.`,
 
@@ -1564,7 +1566,8 @@ function buildResourceContext(searchResults, location) {
   // ── Guideline/PDF knowledge section ──
   if (guidelineSnippets.length > 0) {
     context += `\n\n═══ PEER SUPPORT GUIDELINES & EVIDENCE-BASED PRACTICES ═══\n`;
-    context += `(Information from official guideline documents. CITE the source when using this information.)\n\n`;
+    context += `(Information from official guideline documents. CITE the source when using this information.)\n`;
+    context += `IMPORTANT: This section is for clinical guidance, best practices, and policy reference ONLY. Do NOT use addresses, phone numbers, or contact details from this section. For agency contact information, ONLY use the VERIFIED RESOURCES section below.\n\n`;
     guidelineSnippets.forEach((g, i) => {
       context += `📖 Source: "${g.source}"\n`;
       context += `${g.content}\n\n`;
@@ -1638,14 +1641,16 @@ function buildResourceContext(searchResults, location) {
     });
 
     context += `═══ END OF VERIFIED RESOURCES ═══\n`;
-    context += `RESOURCE INSTRUCTIONS: \n`;
-    context += `1. Present agencies in order shown above (nearest first). Include the distance in your response.\n`;
-    context += `2. Agencies marked ★ are within 5 miles — highlight these as the closest options.\n`;
-    context += `3. Agencies marked ● are within 5-10 miles — present as secondary options.\n`;
-    context += `4. Agencies marked ○ are 10-20 miles — only mention if no closer options exist.\n`;
-    context += `5. ALWAYS include the phone number prominently.\n`;
-    context += `6. Do NOT invent, hallucinate, or add placeholder resource details.\n`;
-    context += `7. If none match the client's need, say so honestly and suggest calling 311 or NYC Well (1-888-692-9355).\n`;
+    context += `RESOURCE INSTRUCTIONS (MANDATORY): \n`;
+    context += `1. When presenting agencies, ONLY use addresses, phone numbers, and contact details from THIS "VERIFIED RESOURCES" section. NEVER use addresses or phone numbers found in the GUIDELINES section above.\n`;
+    context += `2. Present agencies in order shown above (nearest first). Include the distance in your response.\n`;
+    context += `3. Agencies marked ★ are within 5 miles — highlight these as the closest options.\n`;
+    context += `4. Agencies marked ● are within 5-10 miles — present as secondary options.\n`;
+    context += `5. Agencies marked ○ are 10-20 miles — only mention if no closer options exist.\n`;
+    context += `6. ALWAYS include the phone number prominently.\n`;
+    context += `7. Do NOT invent, hallucinate, or add placeholder resource details.\n`;
+    context += `8. If none match the client's need, say so honestly and suggest calling 311 or NYC Well (1-888-692-9355).\n`;
+    context += `9. If an agency appears in both the GUIDELINES and VERIFIED RESOURCES sections, ALWAYS use the address and phone from THIS section — the structured directory is the authoritative source for contact details.\n`;
   }
 
   if (!context) return "";

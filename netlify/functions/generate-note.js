@@ -176,7 +176,6 @@ function sanitizeMeta(meta) {
   if (!meta || typeof meta !== "object") return {};
   const safe = {};
   if (meta.risk && /^(None|Low|Moderate|High)$/i.test(meta.risk)) safe.risk = meta.risk;
-  if (Array.isArray(meta.icd10_used)) safe.icd10_used = meta.icd10_used.slice(0, 8);
   if (Array.isArray(meta.tags_used)) safe.tags_used = meta.tags_used.slice(0, 12);
   if (Array.isArray(meta.red_flags)) safe.red_flags = meta.red_flags.slice(0, 8);
   return safe;
@@ -190,7 +189,8 @@ STRICT RULES
 - Use ONLY the provided TEXT, TAGS, and ICD-10 CODES. Do not invent data.
 - If an element wasn’t assessed, write "Not assessed/Not discussed."
 - Professional, nonjudgmental tone; no PHI; keep placeholders like [CLIENT_NAME].
-- Tie clinical reasoning to supplied ICD-10 codes when appropriate.
+- Do NOT include ICD-10 codes, diagnostic codes, or billing codes. Peer Specialists do not assign codes.
+- Do NOT add details that were NOT explicitly in the provided TEXT. Only document what was actually discussed.
 - 2–4 sentences per section; SMART, timebound plans.
 
 TEMPLATES → JSON KEYS (return ONLY JSON with 'sections' and optional 'meta'):
@@ -208,7 +208,6 @@ SCHEMA
   "sections": { ...per template... },
   "meta": {
     "risk": "None|Low|Moderate|High",
-    "icd10_used": ["Z59.82", "..."],
     "tags_used": ["transportation", "..."],
     "red_flags": ["..."]
   }
