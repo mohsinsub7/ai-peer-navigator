@@ -9,11 +9,14 @@ const LOCATION = "global";
 const ENGINE_ID = "ai-peer-assist-multi-ds"; // Multi-data-store engine (PDFs + structured agency data)
 
 // ── GEMINI GENERATION CONFIG ──
+// Low temperature + narrow sampling for HIGH-FIDELITY mode:
+// Clinical peer navigation requires deterministic, data-faithful responses.
+// Addresses, phone numbers, and screening scores must be exact — no creativity.
 const GENERATION_CONFIG = {
-  temperature: 0.3,
-  topK: 20,
-  topP: 0.8,
-  maxOutputTokens: 4096,
+  temperature: 0.1,
+  topK: 10,
+  topP: 0.7,
+  maxOutputTokens: 8192,
 };
 
 const SAFETY_SETTINGS = [
@@ -799,8 +802,11 @@ function parseScreeningResponse(input, options) {
 }
 
 // ── SCREENING NEED DETECTION (proactive suggestion) ──
+// Only scans the CURRENT message (not full history) to avoid irrelevant suggestions
+// on follow-up questions. E.g., mentioning "marijuana" once shouldn't trigger DAST-10
+// on every subsequent message about unrelated topics.
 function detectScreeningNeed(message, history) {
-  const allText = [message, ...(history || []).map(h => h.text || '')].join(' ');
+  const allText = message;
   const suggestions = [];
 
   if (/\b(depress|sad|hopeless|crying|no energy|can't sleep|lost interest|worthless|guilt)\b/i.test(allText)) {
@@ -1132,6 +1138,9 @@ Example:
 - NEVER provide clinical diagnoses, prescribe medications, or give medical advice.
 - If search results are empty or irrelevant, be transparent: "I couldn't find matching resources in my directory for that specific need."
 - You are an AI assistant for Peer Navigators ONLY — never interact as if the client is present.
+- HIGH-FIDELITY MODE: When presenting agency information, you MUST copy addresses and phone numbers EXACTLY as shown in the VERIFIED RESOURCES section. Do not paraphrase, abbreviate, or modify addresses. If an agency is not listed in VERIFIED RESOURCES, do NOT provide any address or phone for it.
+- ZERO-HALLUCINATION RULE: Never generate, infer, or recall addresses, phone numbers, or hours of operation from your training data. ONLY use contact details that appear verbatim in the VERIFIED RESOURCES section of this prompt. The GUIDELINES section has had contact details removed — do not attempt to reconstruct them.
+- If a user asks about a specific agency and it is not in VERIFIED RESOURCES, say: "I found [agency name] mentioned in our guidelines but I don't have verified contact details for them in our directory. Please check their website directly or call 311 for current information."
 
 ## PROXIMITY-BASED REFERRALS (CRITICAL):
 - When presenting agencies, ALWAYS show the approximate distance from the client's location if distance data is provided.
@@ -1285,7 +1294,9 @@ const RESOURCE_CATEGORIES = [
   { keywords: /\b(domestic violence|dv|ipv|intimate partner|abuse|safe house|safe horizon)\b/i, searchTerms: ["domestic violence", "safe house shelter", "DV services"] },
   { keywords: /\b(legal|lawyer|court|immigration|asylum|eviction|undocumented)\b/i, searchTerms: ["immigration legal", "legal aid", "eviction prevention"] },
   { keywords: /\b(clinic|hospital|doctor|medical|health center|urgent care|primary care|hiv|aids|testing|sti|std|hepatitis)\b/i, searchTerms: ["health center clinic", "HIV testing", "community health"] },
-  { keywords: /\b(assist|help|support|resource|service|refer|need)\b/i, searchTerms: ["community services", "social services", "peer support"] },
+  // NOTE: Removed overly broad catch-all (/assist|help|support|resource|service|refer|need/)
+  // that matched nearly every message. The fallback in detectResourceCategories() already
+  // returns ["community services", "social services"] when no specific category matches.
 ];
 
 function detectResourceCategories(message, history) {
@@ -1306,6 +1317,24 @@ function detectResourceCategories(message, history) {
   // Deduplicate and limit to 4 most relevant
   return [...new Set(matched)].slice(0, 4);
 }
+
+// ── FUTURE: NATIVE GROUNDING (Vertex AI Search + Gemini) ──
+// Vertex AI supports grounding Gemini directly on data stores, which would
+// replace our manual search→inject→generate pipeline and reduce hallucinations.
+// To enable, add this to the generateContent request body:
+//
+// tools: [{
+//   retrieval: {
+//     vertexAiSearch: {
+//       datastore: `projects/${PROJECT_ID}/locations/global/collections/default_collection/dataStores/agencylist-ds`
+//     }
+//   }
+// }]
+//
+// Note: This grounds on a SINGLE data store. For multi-store (agencies + PDFs),
+// evaluate whether to ground on agencies only (highest accuracy) or both.
+// Current approach: manual search gives us proximity filtering + source separation.
+// TODO: Evaluate native grounding in a future sprint for improved accuracy.
 
 // ── VERTEX AI SEARCH (with multi-strategy location search) ──
 const SEARCH_URL = `https://discoveryengine.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search:search`;
@@ -1471,6 +1500,26 @@ async function searchVertexAI(query, accessToken, location, history) {
   return merged.slice(0, 20);
 }
 
+// ── STRIP ADDRESSES FROM PDF SNIPPETS ──
+// Removes street addresses, phone numbers, and zip codes from guideline/PDF snippets
+// to prevent the model from using outdated contact info from PDFs instead of the
+// verified structured directory. This is the primary defense against address hallucination.
+function stripAddressesFromSnippet(text) {
+  if (!text) return text;
+  return text
+    // Remove street addresses (number + street name patterns)
+    .replace(/\d{1,5}\s+[\w\s.]+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Drive|Dr|Place|Pl|Lane|Ln|Way|Court|Ct|Terrace|Slip|Broadway|Floor|Fl)\b[.,]?\s*(?:\d{0,3}(?:st|nd|rd|th)\s*(?:Floor|Fl\.?))?\s*/gi, '[address removed] ')
+    // Remove NYC city/state + zip patterns
+    .replace(/\b(?:New York|NY|Brooklyn|Bronx|Queens|Staten Island)[,\s]+(?:NY\s+)?\d{5}(?:-\d{4})?\b/gi, '')
+    // Remove standalone NYC zip codes (10xxx, 11xxx)
+    .replace(/\b1[01]\d{3}(?:-\d{4})?\b/g, '')
+    // Remove phone number patterns
+    .replace(/\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}/g, '[phone removed]')
+    // Clean up extra whitespace
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 // ── BUILD RICH RESOURCE CONTEXT ──
 // Extracts ALL structured fields from search results and formats them
 // so Gemini has real data to reference (not truncated content blobs)
@@ -1505,9 +1554,12 @@ function buildResourceContext(searchResults, location) {
       }
 
       if (content && content.length > 20) {
+        // Strip addresses/phones from PDF snippets to prevent model from using
+        // outdated contact info instead of the verified structured directory
+        const cleanedContent = stripAddressesFromSnippet(content.substring(0, 500));
         guidelineSnippets.push({
           source: sourceName || 'Peer Support Guidelines',
-          content: content.substring(0, 500),
+          content: cleanedContent,
           link: link
         });
       }
@@ -1682,7 +1734,7 @@ async function callVertexAIGenerative(contents, systemPrompt, accessToken) {
     turns: contents.length
   });
 
-  const url = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/publishers/google/models/gemini-2.0-flash:generateContent`;
+  const url = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
 
   return withRetry(async () => {
     const response = await fetch(url, {
@@ -2090,9 +2142,10 @@ export default async function handler(req) {
 *I apologize for the inconvenience. Please try your question again.*`;
     }
 
-    // ── Proactive screening suggestions (only in guidance mode) ──
+    // ── Proactive screening suggestions (only in guidance mode, not resource lookups) ──
     let screeningSuggestions = null;
-    if (!wantsNote && !wantsReferralEmail) {
+    const isResourceLookup = /\b(address|location|where is|agency|center|service center|tell me about|find me|near|close to|directions|hours|phone number)\b/i.test(message);
+    if (!wantsNote && !wantsReferralEmail && !isResourceLookup) {
       const suggestions = detectScreeningNeed(message, history);
       if (suggestions.length > 0) {
         screeningSuggestions = suggestions;
