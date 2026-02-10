@@ -225,6 +225,112 @@
       color: #1e293b;
     }
 
+    /* ── SCREENING MODE STYLES ── */
+    .screening-progress {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 8px 14px;
+      margin-bottom: 10px;
+      font-size: 12px;
+      color: #1e40af;
+      font-weight: 600;
+    }
+    .screening-progress .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #dbeafe;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .screening-progress .progress-fill {
+      height: 100%;
+      background: #2563eb;
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .screening-options {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+    }
+    .screening-option-btn {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      color: #1e40af;
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.15s;
+    }
+    .screening-option-btn:hover {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+    .message.assistant .message-content.screening-output {
+      background: #eff6ff;
+      border: 2px solid #93c5fd;
+    }
+    .screening-complete-output {
+      background: #f0fdf4;
+      border: 2px solid #86efac;
+    }
+    .screening-complete-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1e40af;
+      color: #fff;
+      margin: -12px -16px 12px -16px;
+      padding: 10px 16px;
+      border-radius: 10px 10px 0 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .screening-result-body {
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .screening-result-body strong {
+      color: #166534;
+    }
+
+    /* ── REFERRAL EMAIL STYLES ── */
+    .referral-email-output {
+      background: #fdf4ff;
+      border: 2px solid #e9d5ff;
+    }
+    .referral-email-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #7c3aed;
+      color: #fff;
+      margin: -12px -16px 12px -16px;
+      padding: 10px 16px;
+      border-radius: 10px 10px 0 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .referral-email-body {
+      font-size: 13px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+    }
+    .referral-email-body strong {
+      color: #6d28d9;
+    }
+
     /* ── MARKDOWN STYLING IN ASSISTANT MESSAGES ── */
     .message.assistant .message-content h3 {
       font-size: 13px;
@@ -689,6 +795,9 @@
     // ── CONVERSATION HISTORY ──
     let conversationHistory = [];
 
+    // ── SCREENING STATE ──
+    let activeScreeningState = null; // { formId, currentQuestion, responses[], startTime }
+
     // ── SESSION PERSISTENCE ──
     const SESSION_KEY = 'ai_peer_assist_session';
     const SESSION_EXPIRY_HOURS = 24;
@@ -700,6 +809,10 @@
           timestamp: Date.now(),
         };
         sessionStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+        // Store session start time (only set once per session for duration tracking)
+        if (!sessionStorage.getItem('ai_peer_session_ts')) {
+          sessionStorage.setItem('ai_peer_session_ts', String(Date.now()));
+        }
       } catch (e) {
         console.warn('Could not save session:', e);
       }
@@ -725,6 +838,7 @@
 
     function clearSavedSession() {
       sessionStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem('ai_peer_session_ts');
     }
 
     function restoreSession(sessionData) {
@@ -839,7 +953,8 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: text,
-            history: conversationHistory.slice(0, -1) // Send all history except the current message (it's sent as `message`)
+            history: conversationHistory.slice(0, -1),
+            screeningState: activeScreeningState
           })
         });
 
@@ -849,10 +964,19 @@
         const responseText = data.response || 'No response received.';
         const isNote = data.mode === 'note';
         const isCrisis = data.mode === 'crisis';
+        const isScreening = data.mode === 'screening';
+        const isScreeningComplete = data.mode === 'screening_complete';
 
         // Add assistant response to history
         conversationHistory.push({ role: 'model', text: responseText });
-        saveSession(); // Persist to sessionStorage
+        saveSession();
+
+        // Update screening state from server
+        if (isScreening && data.screeningState) {
+          activeScreeningState = data.screeningState;
+        } else if (isScreeningComplete || (!isScreening)) {
+          activeScreeningState = null;
+        }
 
         if (isCrisis) {
           // Render as CRISIS alert
@@ -863,8 +987,8 @@
               </div>
               <div>${parseMarkdown(responseText)}</div>
             </div>`;
-          // Announce to screen readers
           announceToScreenReader('Crisis detected. Immediate action required. Crisis resources are displayed.');
+
         } else if (isNote) {
           // Render as clinical note
           const noteFormat = data.noteFormat || 'BIRP';
@@ -876,8 +1000,75 @@
               </div>
               <div class="note-body">${escapeHtml(responseText)}</div>
             </div>`;
+
+        } else if (data.mode === 'referral_email') {
+          // Render as referral email preview
+          loadingMsg.innerHTML = `
+            <div class="message-content referral-email-output">
+              <div class="referral-email-header">
+                <span>📧 Referral Email Draft</span>
+                <button class="copy-btn" onclick="copyNote(this)">Copy Email</button>
+              </div>
+              <div class="referral-email-body">${parseMarkdown(responseText)}</div>
+            </div>`;
+
+        } else if (isScreening) {
+          // Render screening question with progress bar and quick-response buttons
+          const prog = data.screeningProgress || {};
+          const pct = prog.progress != null ? Math.round(prog.progress * 100) : 0;
+          let screeningHtml = `<div class="message-content screening-output">`;
+          screeningHtml += `<div class="screening-progress">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span>${prog.formName || 'Screening'} — Question ${prog.questionNumber || '?'} of ${prog.totalQuestions || '?'}</span>
+              <button onclick="cancelScreening()" style="background:none;border:1px solid #94a3b8;color:#64748b;padding:2px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem;">Cancel</button>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          </div>`;
+          screeningHtml += `<div>${parseMarkdown(responseText)}</div>`;
+
+          // Build quick-response buttons from the response text
+          const optionMatches = responseText.match(/\*\*(\d+)\*\* — (.+)/g);
+          if (optionMatches && optionMatches.length > 0) {
+            screeningHtml += `<div class="screening-options">`;
+            optionMatches.forEach(match => {
+              const parts = match.match(/\*\*(\d+)\*\* — (.+)/);
+              if (parts) {
+                screeningHtml += `<button class="screening-option-btn" onclick="sendScreeningResponse('${parts[1]}')">${parts[1]} — ${escapeHtml(parts[2])}</button>`;
+              }
+            });
+            screeningHtml += `</div>`;
+          }
+
+          screeningHtml += `</div>`;
+          loadingMsg.innerHTML = screeningHtml;
+          announceToScreenReader(`Screening question ${prog.questionNumber} of ${prog.totalQuestions}`);
+
+        } else if (isScreeningComplete) {
+          // Render screening result with copy and summary
+          const result = data.screeningResult || {};
+          // Store the result for PDF download
+          window._lastScreeningResult = result;
+
+          let completeHtml = `<div class="message-content screening-complete-output">`;
+          completeHtml += `<div class="screening-complete-header">
+            <span>📋 ${result.formName || 'Screening'} — Complete</span>
+            <div>
+              <button class="copy-btn" onclick="downloadScreeningPDF()" style="margin-right:6px;">Download PDF</button>
+              <button class="copy-btn" onclick="copyNote(this)">Copy Results</button>
+            </div>
+          </div>`;
+          completeHtml += `<div class="screening-result-body">${parseMarkdown(responseText)}</div>`;
+
+          if (result.suicidalIdeation || result.selfHarmFlag || result.acute) {
+            completeHtml += `<div class="crisis-header" style="margin-top:12px;"><span>⚠️ SAFETY FLAG — Review Immediately</span></div>`;
+          }
+
+          completeHtml += `</div>`;
+          loadingMsg.innerHTML = completeHtml;
+          announceToScreenReader(`Screening complete. Score: ${result.score} out of ${result.maxScore}. Severity: ${result.severity}`);
+
         } else {
-          // Render as guidance
+          // Render as guidance (with optional screening suggestions)
           const formattedResponse = parseMarkdown(responseText);
           loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}</div>`;
         }
@@ -889,6 +1080,18 @@
         if (conversationHistory[conversationHistory.length - 1]?.role === 'model') {
           conversationHistory.pop();
         }
+        // Reset screening state on error to avoid stuck state
+        if (activeScreeningState) {
+          activeScreeningState = null;
+          userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
+        }
+      }
+
+      // Update input placeholder during screening
+      if (activeScreeningState) {
+        userInput.placeholder = 'Enter response number or text...';
+      } else {
+        userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
       }
 
       isLoading = false;
@@ -897,6 +1100,52 @@
       userInput.focus();
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
       updateSessionInfo();
+    }
+
+    // ── SCREENING QUICK-RESPONSE HANDLER ──
+    function sendScreeningResponse(value) {
+      userInput.value = value;
+      sendMessage(value);
+    }
+
+    // ── DOWNLOAD SCREENING PDF ──
+    async function downloadScreeningPDF() {
+      const result = window._lastScreeningResult;
+      if (!result) {
+        alert('No screening result available for download.');
+        return;
+      }
+      try {
+        const response = await fetch('/.netlify/functions/screening-form-handler', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ screeningResult: result })
+        });
+        if (!response.ok) throw new Error('PDF generation failed');
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${result.formId}_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('PDF download error:', err);
+        alert('Could not generate PDF. Please copy the results instead.');
+      }
+    }
+
+    // ── CANCEL SCREENING ──
+    function cancelScreening() {
+      activeScreeningState = null;
+      userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
+      const systemMsg = document.createElement('div');
+      systemMsg.className = 'message system';
+      systemMsg.innerHTML = `<div class="message-content">Screening cancelled. You can continue with other questions or start a new screening anytime.</div>`;
+      messagesDiv.appendChild(systemMsg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 
     function escapeHtml(text) {
@@ -965,22 +1214,95 @@
       });
     });
 
-    // Clear session
+    // Clear session (with optional session summary)
     clearBtn.addEventListener('click', () => {
-      if (confirm('Clear this session? All conversation history will be lost.')) {
-        conversationHistory = [];
-        clearSavedSession();
-        updateSessionInfo();
-        messagesDiv.innerHTML = `
-          <div class="message assistant">
-            <div class="message-content">
-              <strong>Session cleared.</strong><br><br>
-              Tell me about your next client visit and I'll help with guidance, resources, and documentation.
-            </div>
-          </div>
-        `;
+      if (conversationHistory.length < 4) {
+        // Not enough history for a summary — just clear
+        if (confirm('Clear this session?')) {
+          performClearSession();
+        }
+        return;
+      }
+
+      const choice = confirm('Would you like a session summary before clearing?\n\nOK = Generate summary, then clear\nCancel = Clear without summary');
+      if (choice) {
+        // Generate summary then clear
+        generateSessionSummary().then(() => {
+          performClearSession();
+        });
+      } else {
+        if (confirm('Clear this session? All conversation history will be lost.')) {
+          performClearSession();
+        }
       }
     });
+
+    function performClearSession() {
+      conversationHistory = [];
+      activeScreeningState = null;
+      clearSavedSession();
+      updateSessionInfo();
+      userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
+      messagesDiv.innerHTML = `
+        <div class="message assistant">
+          <div class="message-content">
+            <strong>Session cleared.</strong><br><br>
+            Tell me about your next client visit and I'll help with guidance, resources, and documentation.
+          </div>
+        </div>
+      `;
+    }
+
+    async function generateSessionSummary() {
+      // Build a summary from conversation history locally
+      const userMessages = conversationHistory.filter(m => m.role === 'user').map(m => m.text);
+      const modelMessages = conversationHistory.filter(m => m.role === 'model').map(m => m.text);
+      const totalExchanges = userMessages.length;
+
+      // Detect topics/actions from message patterns
+      const topics = [];
+      const allText = conversationHistory.map(m => m.text).join(' ').toLowerCase();
+
+      if (/\b(phq|gad|audit|dast|cage|crafft|asq|ptsd|pcl|epds|screening)\b/.test(allText)) topics.push('Behavioral health screening');
+      if (/\b(referral|refer|agency|program|service)\b/.test(allText)) topics.push('Resource referrals');
+      if (/\b(crisis|suicid|harm|safety plan|988|911)\b/.test(allText)) topics.push('Crisis intervention');
+      if (/\b(note|soap|dap|girp|birp|documentation)\b/.test(allText)) topics.push('Clinical documentation');
+      if (/\b(housing|shelter|homeless)\b/.test(allText)) topics.push('Housing assistance');
+      if (/\b(food|snap|pantry|meals)\b/.test(allText)) topics.push('Food assistance');
+      if (/\b(substance|alcohol|drug|recovery|treatment)\b/.test(allText)) topics.push('Substance use support');
+      if (/\b(mental health|depression|anxiety|therapy|counseling)\b/.test(allText)) topics.push('Mental health support');
+      if (/\b(insurance|medicaid|medicare|benefits)\b/.test(allText)) topics.push('Benefits/insurance');
+      if (topics.length === 0) topics.push('General peer support guidance');
+
+      const summaryHtml = `
+        <div class="message-content note-output" style="background:#f0f9ff;border-color:#93c5fd;">
+          <div class="note-header" style="background:#1e40af;">
+            <span>📊 Session Summary</span>
+            <button class="copy-btn" onclick="copyNote(this)">Copy</button>
+          </div>
+          <div class="note-body" style="white-space:pre-wrap;">Session Summary — ${new Date().toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })} at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+
+Total Exchanges: ${totalExchanges}
+Duration: ${conversationHistory.length > 0 ? Math.round((Date.now() - (parseInt(sessionStorage.getItem('ai_peer_session_ts')) || Date.now())) / 60000) : 0} minutes
+
+Topics Covered:
+${topics.map(t => '  - ' + t).join('\n')}
+
+Key Actions:
+${modelMessages.some(m => /screening complete/i.test(m)) ? '  - Screening assessment completed\n' : ''}${modelMessages.some(m => /agency|program|miles/i.test(m)) ? '  - Resource referrals provided\n' : ''}${modelMessages.some(m => /clinical note|SOAP|DAP|GIRP|BIRP/i.test(m)) ? '  - Clinical note generated\n' : ''}${modelMessages.some(m => /referral email/i.test(m)) ? '  - Referral email drafted\n' : ''}${modelMessages.some(m => /crisis/i.test(m)) ? '  - Crisis protocol activated\n' : ''}  - ${totalExchanges} navigator queries addressed
+
+Session will be cleared after this summary.</div>
+        </div>`;
+
+      const summaryMsg = document.createElement('div');
+      summaryMsg.className = 'message assistant';
+      summaryMsg.innerHTML = summaryHtml;
+      messagesDiv.appendChild(summaryMsg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      // Brief pause so they can copy if needed
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
 
     // ── SESSION RESTORE ON PAGE LOAD ──
     const savedSession = loadSession();
