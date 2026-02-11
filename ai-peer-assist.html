@@ -638,13 +638,12 @@
 
     /* ── SCREENING SUGGESTION CARD ── */
     .screening-suggestion-card {
-      margin-top: 8px;
+      margin-top: 12px;
       padding: 10px 14px;
       background: #fffbeb;
       border: 1px solid #fbbf24;
       border-radius: 10px;
       font-size: 13px;
-      max-width: 88%;
     }
     .screening-suggestion-card .suggestion-header {
       font-weight: 700;
@@ -684,6 +683,21 @@
       padding: 8px 12px;
       border-radius: 8px;
       margin-top: 12px;
+    }
+
+    /* ── BLOCKQUOTE / CALLOUT STYLING ── */
+    .message.assistant .message-content blockquote.callout {
+      background: #fffbeb;
+      border-left: 3px solid #f59e0b;
+      padding: 10px 14px;
+      border-radius: 0 8px 8px 0;
+      margin: 12px 0;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #78350f;
+    }
+    .message.assistant .message-content blockquote.callout strong {
+      color: #92400e;
     }
 
     .message.system .message-content {
@@ -850,7 +864,7 @@
 
     /* ── SIDEBAR ── */
     .sidebar {
-      width: 240px;
+      width: 280px;
       background: var(--sidebar-bg);
       border-left: 1px solid var(--border);
       display: flex;
@@ -882,6 +896,39 @@
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.55;
+    }
+
+    .feature-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .feature-list li {
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      padding: 6px 8px;
+      background: var(--bg);
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .feature-list li strong {
+      color: var(--text);
+      display: block;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+    .feature-list li em {
+      color: var(--accent);
+      font-style: normal;
+      font-weight: 600;
+      font-size: 11px;
+      background: var(--accent-light);
+      padding: 1px 5px;
+      border-radius: 3px;
     }
 
     .tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -1008,29 +1055,33 @@
 
     <aside class="sidebar" role="complementary" aria-label="Quick tools and information">
       <div class="sidebar-card">
-        <h3>Quick Topics</h3>
-        <div class="tags">
-          <div class="tag" data-prompt="My client is hungry and needs food assistance today">Food Access</div>
-          <div class="tag" data-prompt="Client needs emergency shelter tonight in Manhattan">Shelter</div>
-          <div class="tag" data-prompt="Client is in recovery and missed their medication appointment">Recovery</div>
-          <div class="tag" data-prompt="How do I support someone in crisis without clinical intervention?">Crisis</div>
-          <div class="tag" data-prompt="Client needs help with Medicaid enrollment">Benefits</div>
-          <div class="tag" data-prompt="What are best practices for peer documentation?">Documentation</div>
-        </div>
+        <h3>🛠️ What I Can Do</h3>
+        <ul class="feature-list">
+          <li><strong>🔍 Screenings</strong> — 12 validated tools (PHQ-9, GAD-7, AUDIT, PC-PTSD-5, DAST-10, ASQ, CRAFFT, EPDS, and more). Say <em>"start PHQ-9"</em> to begin. Download PDF results when done.</li>
+          <li><strong>📋 Clinical Notes</strong> — Generate chart-ready SOAP, DAP, GIRP, or BIRP notes from our conversation. Use the buttons below the chat.</li>
+          <li><strong>📧 Referral Emails</strong> — Draft professional referral emails. Say <em>"write a referral email"</em>.</li>
+          <li><strong>📞 Warm Handoff Scripts</strong> — Get a phone script for calling agencies. Say <em>"warm handoff script"</em>.</li>
+          <li><strong>📍 Resource Finder</strong> — Search 942+ NYC agencies by zip code. Include a location like <em>"food pantry near 10451"</em>.</li>
+          <li><strong>💊 SAMHSA Live Search</strong> — Real-time substance use treatment facility data from FindTreatment.gov.</li>
+          <li><strong>🚨 Crisis Detection</strong> — Auto-detects safety concerns and provides crisis resources (988, 911, Safe Horizon).</li>
+          <li><strong>🗺️ Needs Tracking</strong> — Automatically maps SDoH domains (housing, food, MH, SUD, benefits, etc.) across the session.</li>
+        </ul>
       </div>
 
       <div class="sidebar-card">
-        <h3>Generate Notes</h3>
-        <p>After discussing your client's visit, click a note button below the chat or type "make me a SOAP note" to generate chart-ready documentation.</p>
-        <div class="status">
+        <h3>Quick Start</h3>
+        <div class="tags">
+          <div class="tag" data-prompt="My client is hungry and needs food assistance today">🍽️ Food</div>
+          <div class="tag" data-prompt="Client needs emergency shelter tonight">🏠 Shelter</div>
+          <div class="tag" data-prompt="Client is in recovery and needs substance use treatment">💊 Recovery</div>
+          <div class="tag" data-prompt="Client needs help with Medicaid enrollment">📋 Benefits</div>
+          <div class="tag" data-prompt="start PHQ-4">🔍 Quick Screen</div>
+          <div class="tag" data-prompt="Client needs a job and has no work history">💼 Employment</div>
+        </div>
+        <div class="status" style="margin-top:10px;">
           <div class="status-dot"></div>
           <span>Session memory active</span>
         </div>
-      </div>
-
-      <div class="sidebar-card">
-        <h3>Knowledge Base</h3>
-        <p>Powered by Vertex AI Search with access to peer support guidelines, NYC agency directories, and evidence-based toolkits.</p>
       </div>
 
       <div class="sidebar-card warning-card">
@@ -1146,6 +1197,9 @@
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
 
+        // Blockquotes (> lines) — must run AFTER HTML escaping
+        .replace(/^&gt;\s?(.*)$/gm, '%%BLOCKQUOTE%%$1%%/BLOCKQUOTE%%')
+
         .replace(/^### 🎯(.*)$/gm, '<h3 class="section-header quick">🎯$1</h3><div class="section-quick">')
         .replace(/^### 💬(.*)$/gm, '</div><h3 class="section-header say">💬$1</h3><div class="section-action">')
         .replace(/^### ✅(.*)$/gm, '</div><h3 class="section-header action">✅$1</h3><div class="section-action">')
@@ -1172,8 +1226,24 @@
         })
 
         .replace(/\n\n/g, '</p><p>')
-        .replace(/\n/g, '<br>')
+        .replace(/\n/g, '<br>');
 
+      // Convert blockquote placeholders to proper HTML
+      html = html.replace(/%%BLOCKQUOTE%%/g, '<blockquote class="callout">');
+      html = html.replace(/%%\/BLOCKQUOTE%%/g, '</blockquote>');
+      // Merge consecutive blockquotes into one
+      html = html.replace(/<\/blockquote>(<br>|<\/p><p>)*<blockquote class="callout">/g, '<br>');
+
+      // Clean up p-tags that wrap block elements (causes invalid HTML / broken layout)
+      html = html.replace(/<\/p><p>(<\/div>)/g, '$1');
+      html = html.replace(/<\/p><p>(<h[1-6])/g, '$1');
+      html = html.replace(/<\/p><p>(<hr>)/g, '$1');
+      html = html.replace(/<\/p><p>(<ul|<ol)/g, '$1');
+      html = html.replace(/<\/p><p>(<blockquote)/g, '$1');
+      html = html.replace(/(<\/div>)<\/p>/g, '$1');
+      html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+
+      html = html
         .replace(/<div><\/div>/g, '')
         .replace(/^<\/div>/, '')
         .replace(/<div>$/, '');
@@ -1429,7 +1499,7 @@
             suggestionHtml += '</div>';
           }
 
-          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}${needsMapHtml}</div>${suggestionHtml}`;
+          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}${needsMapHtml}${suggestionHtml}</div>`;
         }
       } catch (error) {
         console.error('Error:', error);
