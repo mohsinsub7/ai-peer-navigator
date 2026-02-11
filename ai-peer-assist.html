@@ -124,7 +124,7 @@
     main {
       display: flex;
       height: calc(100vh - 61px);
-      max-width: 1280px;
+      max-width: 1440px;
       margin: 0 auto;
       overflow: hidden;
     }
@@ -181,6 +181,7 @@
       border: 1px solid var(--border);
       box-shadow: var(--shadow-sm);
       border-bottom-left-radius: 4px;
+      max-width: 88%;
     }
 
     /* ── NOTE OUTPUT STYLING ── */
@@ -430,6 +431,31 @@
       color: #6d28d9;
     }
 
+    /* ── WARM HANDOFF STYLING ── */
+    .warm-handoff-output {
+      background: #eff6ff;
+      border: 2px solid #bfdbfe;
+    }
+    .warm-handoff-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1d4ed8;
+      color: #fff;
+      margin: -12px -16px 12px -16px;
+      padding: 10px 16px;
+      border-radius: 10px 10px 0 0;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .warm-handoff-body {
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .warm-handoff-body strong {
+      color: #1e40af;
+    }
+
     /* ── MARKDOWN STYLING IN ASSISTANT MESSAGES ── */
     .message.assistant .message-content h3 {
       font-size: 13px;
@@ -513,6 +539,141 @@
       padding: 10px 12px;
       border-radius: 0 8px 8px 0;
       margin: 8px 0;
+    }
+
+    .message.assistant .message-content .section-checklist {
+      background: #f0f9ff;
+      border-left: 3px solid #0ea5e9;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+
+    .section-header.checklist {
+      color: #0369a1;
+    }
+
+    ul.checklist {
+      list-style: none;
+      padding-left: 0;
+      margin: 6px 0;
+    }
+
+    ul.checklist .checklist-item {
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin: 3px 0;
+      transition: background-color 0.2s;
+    }
+
+    ul.checklist .checklist-item:hover {
+      background: rgba(14, 165, 233, 0.06);
+    }
+
+    ul.checklist .checklist-item.checked {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+
+    ul.checklist .checklist-item label {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    ul.checklist .checklist-item input[type="checkbox"] {
+      accent-color: #0ea5e9;
+      width: 16px;
+      height: 16px;
+      margin-top: 1px;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    /* ── NEEDS MAP ── */
+    .needs-map {
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: #fafafa;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .needs-map-header {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .needs-map-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .needs-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .needs-chip.chip-addressed {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .needs-chip.chip-identified {
+      background: #fef9c3;
+      border: 1px solid #fde047;
+      color: #854d0e;
+    }
+
+    /* ── SCREENING SUGGESTION CARD ── */
+    .screening-suggestion-card {
+      margin-top: 8px;
+      padding: 10px 14px;
+      background: #fffbeb;
+      border: 1px solid #fbbf24;
+      border-radius: 10px;
+      font-size: 13px;
+      max-width: 88%;
+    }
+    .screening-suggestion-card .suggestion-header {
+      font-weight: 700;
+      font-size: 13px;
+      color: #92400e;
+      margin-bottom: 6px;
+    }
+    .screening-suggestion-card p {
+      color: #78350f;
+      margin: 0 0 8px 0;
+      font-size: 12px;
+    }
+    .suggestion-btn {
+      display: block;
+      width: 100%;
+      margin: 4px 0;
+      padding: 8px 12px;
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      color: #92400e;
+      transition: background-color 0.15s;
+    }
+    .suggestion-btn:hover {
+      background: #fde68a;
     }
 
     .message.assistant .message-content .disclaimer {
@@ -689,14 +850,14 @@
 
     /* ── SIDEBAR ── */
     .sidebar {
-      width: 280px;
+      width: 240px;
       background: var(--sidebar-bg);
       border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
       gap: 0;
       overflow-y: auto;
-      padding: 16px;
+      padding: 14px;
     }
 
     .sidebar-card {
@@ -784,7 +945,8 @@
         order: -1;
       }
       .sidebar-card { flex-shrink: 0; width: 220px; margin-bottom: 0; margin-right: 10px; }
-      .message-content { max-width: 88%; }
+      .message-content { max-width: 95%; }
+      .message.assistant .message-content { max-width: 95%; }
       .message.assistant .message-content.note-output { max-width: 95%; }
     }
 
@@ -990,18 +1152,22 @@
         .replace(/^### 📍(.*)$/gm, '</div><h3 class="section-header resource">📍$1</h3><div class="section-resource">')
         .replace(/^### ⚠️(.*)$/gm, '</div><h3 class="section-header warning">⚠️$1</h3><div class="section-warning">')
         .replace(/^### 📝(.*)$/gm, '</div><h3 class="section-header doc">📝$1</h3><div class="section-quick">')
+        .replace(/^### 📋(.*)$/gm, '</div><h3 class="section-header checklist">📋$1</h3><div class="section-checklist">')
         .replace(/^### (.*)$/gm, '</div><h3>$1</h3><div>')
 
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
         .replace(/\*([^*]+)\*/g, '<em>$1</em>')
 
-        .replace(/^---$/gm, '</div><hr>')
+        .replace(/^---$/gm, '<hr>')
 
+        .replace(/^- \[x\]\s+(.*)$/gm, '<li class="checklist-item checked"><label><input type="checkbox" checked onchange="this.parentElement.parentElement.classList.toggle(\'checked\',this.checked)"> $1</label></li>')
+        .replace(/^- \[ \]\s+(.*)$/gm, '<li class="checklist-item"><label><input type="checkbox" onchange="this.parentElement.parentElement.classList.toggle(\'checked\',this.checked)"> $1</label></li>')
         .replace(/^(\d+)\.\s+(.*)$/gm, '<li><span class="step-num">$1.</span> $2</li>')
         .replace(/^[•\-]\s+(.*)$/gm, '<li>$1</li>')
 
-        .replace(/(<li>.*<\/li>\n?)+/g, (match) => {
+        .replace(/(<li[\s>].*<\/li>\n?)+/g, (match) => {
           if (match.includes('step-num')) return '<ol>' + match + '</ol>';
+          if (match.includes('checklist-item')) return '<ul class="checklist">' + match + '</ul>';
           return '<ul>' + match + '</ul>';
         })
 
@@ -1109,6 +1275,17 @@
                 <button class="copy-btn" onclick="copyNote(this)">Copy Email</button>
               </div>
               <div class="referral-email-body">${parseMarkdown(responseText)}</div>
+            </div>`;
+
+        } else if (data.mode === 'warm_handoff') {
+          // Render as warm handoff phone script
+          loadingMsg.innerHTML = `
+            <div class="message-content warm-handoff-output">
+              <div class="warm-handoff-header">
+                <span>📞 Warm Handoff Phone Script</span>
+                <button class="copy-btn" onclick="copyNote(this)">Copy Script</button>
+              </div>
+              <div class="warm-handoff-body">${parseMarkdown(responseText)}</div>
             </div>`;
 
         } else if (isScreening) {
@@ -1224,9 +1401,35 @@
           announceToScreenReader(`Screening complete. Score: ${result.score} out of ${result.maxScore}. Severity: ${result.severity}`);
 
         } else {
-          // Render as guidance (with optional screening suggestions)
+          // Render as guidance
           const formattedResponse = parseMarkdown(responseText);
-          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}</div>`;
+
+          // Needs map chips (SDoH domain tracking)
+          let needsMapHtml = '';
+          if (data.needsMap && Object.keys(data.needsMap).length >= 2) {
+            needsMapHtml = '<div class="needs-map"><div class="needs-map-header">🗺️ Client Needs Map</div><div class="needs-map-chips">';
+            for (const [key, domain] of Object.entries(data.needsMap)) {
+              const chipClass = domain.addressed ? 'chip-addressed' : 'chip-identified';
+              const statusIcon = domain.addressed ? '✅' : '🟡';
+              const statusLabel = domain.addressed ? 'Addressed' : 'Identified';
+              needsMapHtml += `<span class="needs-chip ${chipClass}" title="${statusLabel}: ${domain.label}">${domain.icon} ${domain.label} ${statusIcon}</span>`;
+            }
+            needsMapHtml += '</div></div>';
+          }
+
+          // Screening suggestion card (separate from response, rendered below)
+          let suggestionHtml = '';
+          if (data.screeningSuggestions && data.screeningSuggestions.length > 0) {
+            suggestionHtml = '<div class="screening-suggestion-card">';
+            suggestionHtml += '<div class="suggestion-header">🔍 Screening Suggestion</div>';
+            suggestionHtml += '<p>Based on this conversation, you might consider administering:</p>';
+            data.screeningSuggestions.forEach(s => {
+              suggestionHtml += `<button class="suggestion-btn" onclick="sendMessage('start ${escapeHtml(s.form)}')">${escapeHtml(s.form)}: ${escapeHtml(s.reason)}</button>`;
+            });
+            suggestionHtml += '</div>';
+          }
+
+          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}${needsMapHtml}</div>${suggestionHtml}`;
         }
       } catch (error) {
         console.error('Error:', error);

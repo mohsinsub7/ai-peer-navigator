@@ -13,9 +13,9 @@ const ENGINE_ID = "ai-peer-assist-multi-ds"; // Multi-data-store engine (PDFs + 
 // Clinical peer navigation requires deterministic, data-faithful responses.
 // Addresses, phone numbers, and screening scores must be exact — no creativity.
 const GENERATION_CONFIG = {
-  temperature: 0.1,
-  topK: 10,
-  topP: 0.7,
+  temperature: 0.0,
+  topK: 1,
+  topP: 0.1,
   maxOutputTokens: 8192,
 };
 
@@ -81,8 +81,61 @@ Document this as a **critical incident**. Note the time, what the client said (e
 *⚠️ Disclaimer: This is not clinical advice. For any medical or psychiatric emergency, contact 911 or go to the nearest emergency room.*`;
 
 function detectCrisis(message, history) {
-  const allText = [message, ...(history || []).slice(-4).map(h => h.text || '')].join(' ');
+  const userMessages = (history || []).filter(h => h.role === 'user').slice(-4).map(h => h.text || '');
+  const allText = [message, ...userMessages].join(' ');
   return CRISIS_PATTERNS.some(p => p.test(allText));
+}
+
+// ── POST-RESPONSE SAFETY CHECK (OUTPUT SCANNING) ──
+// Scans model output for scope violations: diagnostic language, prescribing advice,
+// or missing crisis routing when input indicated risk. Appends inline disclaimers.
+const DIAGNOSTIC_PATTERNS = [
+  /\byou have (bipolar|schizophrenia|ptsd|depression|anxiety|adhd|bpd|ocd|autism|personality disorder)\b/i,
+  /\byour client has (bipolar|schizophrenia|ptsd|depression|anxiety|adhd|bpd|ocd|autism|personality disorder)\b/i,
+  /\bdiagnos(is|ed|e) of\b/i,
+  /\bthis (is|looks like|sounds like|appears to be) (bipolar|schizophrenia|major depression|ptsd|anxiety disorder|personality disorder)\b/i,
+  /\bclient (has|meets criteria for|presents with) [A-Z][\w\s]*(disorder|syndrome)\b/i,
+];
+
+const PRESCRIBING_PATTERNS = [
+  /\bshould (take|start|begin|increase|decrease|stop|change|switch|taper)\b.*\b(medication|dosage|mg|dose|prescription)\b/i,
+  /\bprescribe\b/i,
+  /\brecommend.*(start|take|begin).*(medication|med|drug|prescription)\b/i,
+  /\b(increase|decrease|adjust).*(dosage|dose|mg)\b/i,
+  /\b\d+\s*mg\b.*\b(daily|twice|once|morning|evening|bedtime)\b/i,
+];
+
+const RISK_INPUT_PATTERNS = [
+  /\b(suicid|self[- ]?harm|kill (my|him|her|them)self|want(s)? to die|end (my|their) life|cutting|overdos)\b/i,
+  /\b(homicid|kill (someone|a person)|threat(en)?.*with weapon)\b/i,
+  /\b(not safe|unsafe|afraid.*(partner|home)|domestic violence)\b/i,
+];
+
+function postResponseSafetyCheck(responseText, inputMessage) {
+  const disclaimers = [];
+
+  // Check for diagnostic language in output
+  const hasDiagnostic = DIAGNOSTIC_PATTERNS.some(p => p.test(responseText));
+  if (hasDiagnostic) {
+    disclaimers.push(`\n\n> **⚠️ Scope Reminder:** As a Peer Navigator, you do not diagnose conditions. The information above is for awareness only. Clinical diagnoses must come from licensed mental health professionals. If you believe your client needs a diagnostic evaluation, refer them to a psychiatrist or licensed clinician.`);
+  }
+
+  // Check for prescribing/medication advice in output
+  const hasPrescribing = PRESCRIBING_PATTERNS.some(p => p.test(responseText));
+  if (hasPrescribing) {
+    disclaimers.push(`\n\n> **⚠️ Scope Reminder:** Peer Navigators do not prescribe, adjust, or recommend specific medications or dosages. Medication decisions must be made by the client's prescribing physician or psychiatrist. You can encourage your client to discuss medication options with their provider.`);
+  }
+
+  // Check if input had risk indicators but response lacks crisis routing
+  const inputHasRisk = RISK_INPUT_PATTERNS.some(p => p.test(inputMessage));
+  if (inputHasRisk) {
+    const responseHasCrisisRouting = /\b(988|911|crisis|safe horizon|nyc well|1-888|741741|emergency)\b/i.test(responseText);
+    if (!responseHasCrisisRouting) {
+      disclaimers.push(`\n\n> **🚨 Safety Note:** Your message may indicate a client safety concern. If your client is expressing thoughts of self-harm, suicidal ideation, or is in danger, please immediately contact: **988** (Suicide & Crisis Lifeline), **911** (emergencies), or **NYC Well 1-888-692-9355** (24/7 mental health support).`);
+    }
+  }
+
+  return disclaimers.join('');
 }
 
 // ── NOTE GENERATION DETECTION ──
@@ -120,6 +173,68 @@ const REFERRAL_EMAIL_PATTERNS = [
 function isReferralEmailRequest(message) {
   return REFERRAL_EMAIL_PATTERNS.some(p => p.test(message));
 }
+
+// ── WARM HANDOFF PHONE SCRIPT DETECTION ──
+const WARM_HANDOFF_PATTERNS = [
+  /\b(warm handoff|warm hand-off)\b.*\b(script|call|phone)\b/i,
+  /\b(phone|call)\b.*\b(script|template)\b.*\b(agency|program|provider|clinic|center)\b/i,
+  /\b(generate|create|write|draft|make|give me)\b.*\b(warm handoff|handoff|hand-off)\b/i,
+  /\b(warm handoff|handoff|hand-off)\b.*\b(script|template)\b/i,
+  /\bcalling (the|an?) (agency|program|provider|clinic)\b.*\b(script|what to say)\b/i,
+  /\bhow (do|should) I (call|introduce|start)\b.*\b(agency|program|provider)\b/i,
+];
+
+function isWarmHandoffRequest(message) {
+  return WARM_HANDOFF_PATTERNS.some(p => p.test(message));
+}
+
+const WARM_HANDOFF_INSTRUCTIONS = `You are an AI assistant helping a Peer Navigator prepare a phone script for a warm handoff call to an agency or service provider. Review the FULL conversation history and generate a structured, professional warm handoff phone script.
+
+## WARM HANDOFF PHONE SCRIPT FORMAT:
+
+Generate the script in the EXACT format below. Use information from the conversation. Use [brackets] ONLY for PHI that the navigator will fill in verbally.
+
+---
+
+### 📞 Warm Handoff Phone Script
+
+**Agency:** [Agency name from conversation — use the specific agency discussed]
+**Phone:** [Agency phone from conversation if available]
+
+---
+
+**🔵 OPENING (Your Introduction):**
+"Hi, my name is [Navigator Name], and I'm a Certified Peer Navigator working with [Your Agency Name]. I'm calling to make a warm handoff referral for a client I've been working with."
+
+**🔵 CLIENT SUMMARY (No PHI — keep it general):**
+"I have a client who is seeking [presenting need from conversation — e.g., substance use treatment, housing assistance, mental health support]. They are located in [borough/zip area if known from conversation]."
+
+**🔵 WHAT WAS DISCUSSED:**
+[Summarize what was discussed in the session — 2-3 sentences based on conversation history. Focus on needs identified, not clinical details. Example: "We discussed their interest in exploring treatment options, and they expressed readiness to engage in outpatient services."]
+
+**🔵 WHAT THE CLIENT NEEDS:**
+[List the specific services the client needs based on conversation — e.g., "Intake appointment for outpatient substance use treatment" / "Emergency shelter bed" / "Benefits enrollment assistance"]
+
+**🔵 WARM CLOSE:**
+"Would it be possible to schedule an intake appointment? I'd also like to offer a three-way call with the client so they can hear from you directly and ask any questions. What's the best next step from your end?"
+
+---
+
+**📝 After the Call:**
+- Document the call in your session notes
+- Note the contact person's name and any intake requirements they mentioned
+- Follow up with your client within 24 hours to share what you learned
+
+---
+
+## RULES:
+- Keep the tone warm, professional, and collaborative
+- NEVER include actual client names, DOBs, SSNs, or specific medical details in the script
+- Use [brackets] for anything that is PHI — the navigator fills these in verbally
+- If a specific agency was discussed in the conversation, use that agency's name and phone
+- If no specific agency was discussed, leave the agency field as "[Agency Name]" and note that the navigator should select an appropriate agency from the referral list
+- Base the presenting need, session summary, and services needed on the ACTUAL conversation history
+`;
 
 const REFERRAL_EMAIL_INSTRUCTIONS = `You are an AI assistant helping a Peer Navigator draft a professional clinical referral email. Generate a COMPLETE, ready-to-send referral email based on the conversation context.
 
@@ -1021,6 +1136,8 @@ When search results are provided below your prompt, they contain REAL agency dat
 3. Include the Program type and Site/Office name when available — this helps navigators identify the right location
 4. Prioritize results closest to the client's zip code/borough
 5. If no search results match the need, say so honestly and suggest calling 311 or 211
+6. **Source Attribution**: Each resource includes a Source tag. When presenting resources, include the source in parentheses: "(NYC Agency Directory)" or "(SAMHSA Live Data)". This helps navigators understand where the information comes from.
+7. When hours of operation are NOT available in the data, state: "Hours: Contact agency directly" — do NOT leave hours blank or guess.
 
 ## HARM REDUCTION APPROACH (CRITICAL):
 You operate from a harm reduction framework. This means:
@@ -1080,6 +1197,13 @@ Exact phrases the Peer Navigator can use with the client. Use bullet points.
 
 ### ✅ ACTION STEPS
 Numbered list of specific, actionable steps to take RIGHT NOW. Keep each step concise.
+PRIORITY ORDER (CRITICAL): Always order steps by urgency:
+1. Safety/crisis concerns FIRST (if any)
+2. Immediate basic needs (food, shelter, medical emergency)
+3. Primary presenting problem (the main reason for the visit)
+4. Secondary needs and referrals
+5. Documentation and follow-up
+For each step, briefly explain HOW to address it (not just what to do).
 
 ### 📍 RESOURCES
 Specific resources with names, addresses, phone numbers when available. Format as a clean list.
@@ -1138,8 +1262,20 @@ Example:
 - NEVER provide clinical diagnoses, prescribe medications, or give medical advice.
 - If search results are empty or irrelevant, be transparent: "I couldn't find matching resources in my directory for that specific need."
 - You are an AI assistant for Peer Navigators ONLY — never interact as if the client is present.
-- HIGH-FIDELITY MODE: When presenting agency information, you MUST copy addresses and phone numbers EXACTLY as shown in the VERIFIED RESOURCES section. Do not paraphrase, abbreviate, or modify addresses. If an agency is not listed in VERIFIED RESOURCES, do NOT provide any address or phone for it.
-- ZERO-HALLUCINATION RULE: Never generate, infer, or recall addresses, phone numbers, or hours of operation from your training data. ONLY use contact details that appear verbatim in the VERIFIED RESOURCES section of this prompt. The GUIDELINES section has had contact details removed — do not attempt to reconstruct them.
+- HIGH-FIDELITY MODE (CRITICAL — YOU MUST OBEY THIS):
+  * When presenting agency information, you MUST copy addresses, phone numbers, and program names EXACTLY as shown in the VERIFIED RESOURCES or SAMHSA sections below.
+  * Do not paraphrase, abbreviate, or modify any address or phone number.
+  * Do NOT add hours of operation unless they appear in the data.
+  * Do NOT add distance values unless they appear in the data.
+  * If an agency is not listed in VERIFIED RESOURCES or SAMHSA sections, do NOT provide any address, phone, or hours for it. Instead say "Contact information not available in our directory."
+  * NEVER use your general knowledge or training data for addresses/phones — they are often outdated or wrong.
+- ZERO-HALLUCINATION RULE (CRITICAL — VIOLATIONS CAUSE REAL HARM):
+  * Never generate, infer, guess, or recall addresses, phone numbers, or hours of operation from your training data or general knowledge.
+  * ONLY use contact details that appear VERBATIM in the VERIFIED RESOURCES, SAMHSA LIVE DATA, or structured data sections provided in this prompt.
+  * If no VERIFIED RESOURCES section is present in this prompt, you have NO agency data — do not fabricate any.
+  * The GUIDELINES section has had contact details removed — do not attempt to reconstruct them.
+  * When in doubt, say "I don't have verified contact details for that" rather than risk providing wrong information.
+  * WRONG ADDRESSES CAN SEND VULNERABLE PEOPLE TO DANGEROUS SITUATIONS — accuracy is paramount.
 - If a user asks about a specific agency and it is not in VERIFIED RESOURCES, say: "I found [agency name] mentioned in our guidelines but I don't have verified contact details for them in our directory. Please check their website directly or call 311 for current information."
 
 ## PROXIMITY-BASED REFERRALS (CRITICAL):
@@ -1178,11 +1314,150 @@ Also suggest exploring:
 
 Always frame MI guidance for the NAVIGATOR to use with their client, not directed at the client.
 
+## FOLLOW-UP CHECKLIST (CONDITIONAL):
+When your response includes specific agency referrals, action steps the navigator should take, or resources the client should contact, append the following checklist at the end of your response (BEFORE the Sources section). Do NOT include this checklist for general guidance questions, screening questions, note generation, or purely informational responses.
+
+### 📋 Follow-Up Checklist (24-48 Hours)
+- [ ] Confirm contact made — Call client to confirm they reached the agency
+- [ ] Verify appointment — Was intake scheduled? Date: ___
+- [ ] Check for barriers — Transportation, ID requirements, eligibility, wait list issues
+- [ ] Document outcome — Update chart with referral status (connected/pending/declined)
+- [ ] Schedule next session — Set date for next peer session: ___
+
 ## IMPORTANT:
 - You are NOT a clinician - never diagnose or prescribe
 - For medical emergencies: Direct to 911 or crisis services immediately
 - Always end crisis-related responses with a brief disclaimer
 - When unsure, recommend the navigator consult their supervisor`;
+
+// ── STRUCTURED SESSION CAPTURE (for improved note generation) ──
+// Extracts presenting needs, screenings, referrals, and events from conversation history
+// to prepend structured data to the note generation prompt.
+function extractSessionFields(history) {
+  if (!history || history.length === 0) return null;
+
+  const allText = history.map(h => h.text || '').join(' ');
+  const userText = history.filter(h => h.role === 'user').map(h => h.text || '').join(' ');
+  const modelText = history.filter(h => h.role === 'model').map(h => h.text || '').join(' ');
+
+  // ── Presenting Needs (from user messages)
+  const needsPatterns = [
+    { label: 'Housing instability', pattern: /\b(hous(ing|eless|e)|shelter|evict|sleep(ing)? (outside|rough|on the street)|unhoused)\b/i },
+    { label: 'Food insecurity', pattern: /\b(food|hungry|eat(ing)?|pantry|soup kitchen|meals?|groceries|snap|ebt)\b/i },
+    { label: 'Substance use', pattern: /\b(substance|drug|alcohol|drink(ing)?|heroin|fentanyl|meth|cocaine|crack|opioid|suboxone|methadone|relapse|using|sober|sobriety|recovery|overdose)\b/i },
+    { label: 'Mental health', pattern: /\b(depress|anxiety|anxious|mental health|suicid|self[- ]?harm|trauma|ptsd|panic|bipolar|schizophren|psycho(sis|tic)|mood|voices)\b/i },
+    { label: 'Benefits/entitlements', pattern: /\b(benefits|medicaid|medicare|ssi|ssdi|ssd|snap|ebt|public assistance|cash assistance|disability|insurance|entitlement)\b/i },
+    { label: 'Legal issues', pattern: /\b(legal|court|probation|parole|arrest|incarcerat|jail|prison|lawyer|attorney|warrant|criminal)\b/i },
+    { label: 'Employment', pattern: /\b(employ|job|work(ing)?|career|resume|interview|unemployment|vocational|hired|fired)\b/i },
+    { label: 'Medical/health', pattern: /\b(doctor|hospital|clinic|medical|health|medication|prescription|pharmacy|dental|vision|hiv|hep[- ]?c|chronic|pain|wound|diabet)\b/i },
+    { label: 'Domestic violence', pattern: /\b(domestic violence|ipv|intimate partner|abuse|abusive|safe horizon|dv|shelter.*(women|family)|restraining order)\b/i },
+  ];
+
+  const presentingNeeds = needsPatterns
+    .filter(np => np.pattern.test(userText))
+    .map(np => np.label);
+
+  // ── Screenings Completed (from model responses)
+  const screeningsCompleted = [];
+  const screeningMatches = modelText.match(/(?:PHQ-?(?:4|9)|GAD-?7|PC-?PTSD-?5|AUDIT|DAST-?10|CAGE-?AID|ASQ|CRAFFT|EPDS)\s*(?:—|:|-)\s*(?:Complete|Score:?\s*\d+)/gi);
+  if (screeningMatches) {
+    screeningMatches.forEach(m => {
+      if (!screeningsCompleted.includes(m.trim())) {
+        screeningsCompleted.push(m.trim());
+      }
+    });
+  }
+  // Also check for scoring patterns in model text
+  const scorePatterns = modelText.match(/\b(PHQ-?(?:4|9)|GAD-?7|PC-?PTSD-?5|AUDIT|DAST-?10|CAGE-?AID|ASQ|CRAFFT|EPDS)\b.*?(?:Total )?[Ss]core:?\s*(\d+)/gi);
+  if (scorePatterns) {
+    scorePatterns.forEach(m => {
+      const clean = m.trim().substring(0, 80);
+      if (!screeningsCompleted.some(s => s.includes(clean.split(/score/i)[0].trim()))) {
+        screeningsCompleted.push(clean);
+      }
+    });
+  }
+
+  // ── Referrals Made (agency names from model responses)
+  const referralsMade = [];
+  // Look for agency names that appear after resource headers or in formatted lists
+  const agencyPattern = /\*\*([^*]{5,80})\*\*/g;
+  let match;
+  while ((match = agencyPattern.exec(modelText)) !== null) {
+    const name = match[1].trim();
+    // Filter out non-agency names (section headers, generic labels)
+    if (!/^(quick assessment|what to say|action steps|resources|boundaries|documentation|sources|screening|follow-up|important|note|warning|score|severity|recommendation)/i.test(name)
+        && !referralsMade.includes(name)
+        && referralsMade.length < 10) {
+      referralsMade.push(name);
+    }
+  }
+
+  // ── Crisis Detected?
+  const crisisDetected = /crisis detected|🚨|call 988|suicide.*crisis.*lifeline|immediate.*danger/i.test(modelText);
+
+  // ── Referral Email Generated?
+  const referralEmailGenerated = /referral email draft|📧/i.test(modelText);
+
+  // Only return if we have meaningful data
+  if (presentingNeeds.length === 0 && screeningsCompleted.length === 0 && referralsMade.length === 0 && !crisisDetected) {
+    return null;
+  }
+
+  let structured = `\n--- STRUCTURED SESSION DATA (auto-extracted) ---\n`;
+  if (presentingNeeds.length > 0) structured += `Presenting Needs: ${presentingNeeds.join(', ')}\n`;
+  if (screeningsCompleted.length > 0) structured += `Screenings Completed: ${screeningsCompleted.join('; ')}\n`;
+  if (referralsMade.length > 0) structured += `Referrals/Agencies Discussed: ${referralsMade.join(', ')}\n`;
+  if (crisisDetected) structured += `Crisis Event: Yes — crisis protocol was activated during session\n`;
+  if (referralEmailGenerated) structured += `Referral Email: Generated during session\n`;
+  structured += `--- END STRUCTURED DATA ---\n\n`;
+  structured += `Use this structured data to ensure your note captures ALL presenting needs, screenings, and referrals. Do not omit any of the above items.\n`;
+
+  return structured;
+}
+
+// ── NEEDS MAP BUILDER (SDoH Domain Tracking) ──
+// Scans conversation history to identify and track 9 SDoH domains.
+// Returns a map of { domain: { label, icon, identified, addressed } }
+const SDOH_DOMAINS = [
+  { key: 'housing', label: 'Housing', icon: '🏠', identifyPattern: /\b(hous(ing|eless|e)|shelter|evict|sleep(ing)? (outside|rough)|unhoused|rent|apartment|lease)\b/i, addressPattern: /\b(shelter|housing.*program|housing.*referr|housing.*agency|transitional|supportive housing|rapid rehousing)\b/i },
+  { key: 'food', label: 'Food', icon: '🍽️', identifyPattern: /\b(food|hungry|eat(ing)?|pantry|soup kitchen|meals?|groceries|snap|ebt|food stamps|wic)\b/i, addressPattern: /\b(pantry|pantries|food.*bank|meal.*program|snap.*enroll|ebt.*application)\b/i },
+  { key: 'sud', label: 'Substance Use', icon: '💊', identifyPattern: /\b(substance|drug|alcohol|drink(ing)?|heroin|fentanyl|meth|cocaine|crack|opioid|suboxone|methadone|relapse|using|sober|recovery|overdose|detox|rehab)\b/i, addressPattern: /\b(treatment.*program|detox|rehab|suboxone.*provider|methadone.*clinic|otp|buprenorphine|samhsa|inpatient|outpatient.*treatment)\b/i },
+  { key: 'mh', label: 'Mental Health', icon: '🧠', identifyPattern: /\b(depress|anxiety|anxious|mental health|suicid|self[- ]?harm|trauma|ptsd|panic|bipolar|schizophren|psycho(sis|tic)|mood|voices|therapy|counseling|psychiatr)\b/i, addressPattern: /\b(mental health.*program|therapy.*referr|counseling.*center|psychiatric|nyc well|988|crisis.*team|mental health.*clinic)\b/i },
+  { key: 'benefits', label: 'Benefits', icon: '📋', identifyPattern: /\b(benefits|medicaid|medicare|ssi|ssdi|snap|ebt|public assistance|cash assistance|disability|insurance|entitlement)\b/i, addressPattern: /\b(benefits.*enroll|medicaid.*application|ssi.*application|hra|hhs|benefits.*office|eligibility)\b/i },
+  { key: 'legal', label: 'Legal', icon: '⚖️', identifyPattern: /\b(legal|court|probation|parole|arrest|incarcerat|jail|prison|lawyer|attorney|warrant|criminal|custody)\b/i, addressPattern: /\b(legal.*aid|legal.*services|lawyer|attorney.*referr|court.*advocacy|legal.*clinic)\b/i },
+  { key: 'employment', label: 'Employment', icon: '💼', identifyPattern: /\b(employ|job|work(ing)?|career|resume|interview|unemployment|vocational|hired|fired|workforce)\b/i, addressPattern: /\b(job.*placement|vocational|workforce.*center|employ.*program|career.*services|job.*training)\b/i },
+  { key: 'medical', label: 'Medical', icon: '🏥', identifyPattern: /\b(doctor|hospital|clinic|medical|health|medication|prescription|pharmacy|dental|vision|hiv|hep[- ]?c|chronic|pain|wound|diabet|primary care)\b/i, addressPattern: /\b(clinic.*referr|hospital|medical.*center|health.*center|primary care|dental.*clinic|pharmacy)\b/i },
+  { key: 'dv', label: 'DV/Safety', icon: '🛡️', identifyPattern: /\b(domestic violence|ipv|intimate partner|abuse|abusive|safe horizon|dv|restraining order|safety plan|stalking)\b/i, addressPattern: /\b(safe horizon|dv.*shelter|domestic violence.*program|hotline.*dv|safety.*plan|victim.*services)\b/i },
+];
+
+function buildNeedsMap(history) {
+  if (!history || history.length < 2) return null; // Need at least 1 exchange
+
+  const userText = history.filter(h => h.role === 'user').map(h => h.text || '').join(' ');
+  const modelText = history.filter(h => h.role === 'model').map(h => h.text || '').join(' ');
+
+  const needsMap = {};
+  let identifiedCount = 0;
+
+  for (const domain of SDOH_DOMAINS) {
+    const identified = domain.identifyPattern.test(userText);
+    const addressed = identified && domain.addressPattern.test(modelText);
+
+    if (identified) {
+      needsMap[domain.key] = {
+        label: domain.label,
+        icon: domain.icon,
+        identified: true,
+        addressed
+      };
+      identifiedCount++;
+    }
+  }
+
+  // Only return if at least 2 domains identified (meaningful map)
+  return identifiedCount >= 2 ? needsMap : null;
+}
 
 const NOTE_GENERATION_INSTRUCTIONS = `You are a clinical documentation assistant for Peer Navigators/Specialists. The Peer Navigator has been having a conversation with you about their client visit. Now they are asking you to generate a clinical note based on the ENTIRE conversation history.
 
@@ -1344,8 +1619,7 @@ async function singleSearch(query, accessToken, filter = null) {
     query,
     pageSize: 10,
     contentSearchSpec: {
-      snippetSpec: {},
-      extractiveContentSpec: { maxExtractiveAnswerCount: 3 }
+      snippetSpec: { maxSnippetCount: 3 }
     }
   };
   if (filter) requestBody.filter = filter;
@@ -1500,6 +1774,86 @@ async function searchVertexAI(query, accessToken, location, history) {
   return merged.slice(0, 20);
 }
 
+// ── SAMHSA FindTreatment.gov API INTEGRATION ──
+// Provides real-time substance use treatment facility data (OTP, buprenorphine, naltrexone, detox, residential, outpatient)
+// with verified addresses — much more current than static OASAS data.
+// API docs: https://findtreatment.gov/assets/FindTreatment-Developer-Guide.pdf
+
+const SUD_QUERY_PATTERN = /\b(treatment|rehab|detox|methadone|buprenorphine|suboxone|naltrexone|moud|mat|otp|substance|drug|alcohol|cocaine|heroin|fentanyl|opioid|addiction|recovery|sober|sobriety|clean|withdrawal|inpatient|outpatient|residential)\b/i;
+
+function isSUDQuery(message, history) {
+  const text = [message, ...(history || []).slice(-3).map(h => h.text || '')].join(' ');
+  return SUD_QUERY_PATTERN.test(text);
+}
+
+async function searchSAMHSA(zipcode) {
+  if (!zipcode) return [];
+
+  const coords = NYC_ZIP_COORDS[parseInt(zipcode)];
+  if (!coords) {
+    console.warn("[SAMHSA] No coordinates for zip:", zipcode);
+    return [];
+  }
+
+  const [lat, lng] = coords;
+  // Search within 10 miles (~16093 meters); limitType=2 means miles
+  // limitType=2 = miles, limitValue=10 = 10 miles radius, sCodes: OTP=opioid treatment, BU=buprenorphine, NU=naltrexone
+  const url = `https://findtreatment.gov/locator/exportsAsJson/v2?sAddr=${lat},${lng}&limitType=2&limitValue=16093&pageSize=10&sCodes=OTP,BU,NU`;
+
+  try {
+    console.log("[SAMHSA] Searching FindTreatment.gov...", { zipcode, lat, lng });
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+    const response = await fetch(url, {
+      headers: { "Accept": "application/json" },
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      console.warn("[SAMHSA] API returned status:", response.status);
+      return [];
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('json')) {
+      console.warn("[SAMHSA] API returned non-JSON:", contentType);
+      return [];
+    }
+
+    const data = await response.json();
+    const rows = data.rows || [];
+    console.log("[SAMHSA] ✓ Got", rows.length, "results from FindTreatment.gov");
+
+    // Normalize to our resource format
+    return rows.map(row => ({
+      name: (row.name1 || '').trim(),
+      name2: (row.name2 || '').trim(),
+      address: [row.street1, row.street2].filter(Boolean).join(', ').trim(),
+      city: (row.city || '').trim(),
+      state: (row.state || '').trim(),
+      zipcode: (row.zip || '').trim(),
+      phone: (row.phone || '').trim(),
+      miles: row.miles || 0,
+      facilityType: row.typeFacility || '',
+      website: (row.website || '').trim(),
+      intake: (row.intake1 || '').trim(),
+      hotline: (row.hotline1 || '').trim(),
+      _source: 'SAMHSA'
+    })).filter(r => r.name); // Skip entries with no name
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn("[SAMHSA] Request timed out (8s)");
+    } else {
+      console.warn("[SAMHSA] API error:", error?.message);
+    }
+    return []; // Graceful fallback — silent failure
+  }
+}
+
 // ── STRIP ADDRESSES FROM PDF SNIPPETS ──
 // Removes street addresses, phone numbers, and zip codes from guideline/PDF snippets
 // to prevent the model from using outdated contact info from PDFs instead of the
@@ -1523,7 +1877,8 @@ function stripAddressesFromSnippet(text) {
 // ── BUILD RICH RESOURCE CONTEXT ──
 // Extracts ALL structured fields from search results and formats them
 // so Gemini has real data to reference (not truncated content blobs)
-function buildResourceContext(searchResults, location) {
+// samhsaResults: optional array of live SAMHSA FindTreatment.gov results
+function buildResourceContext(searchResults, location, samhsaResults = []) {
   if (!searchResults || searchResults.length === 0) return "";
 
   const resources = [];
@@ -1615,20 +1970,9 @@ function buildResourceContext(searchResults, location) {
 
   let context = '';
 
-  // ── Guideline/PDF knowledge section ──
-  if (guidelineSnippets.length > 0) {
-    context += `\n\n═══ PEER SUPPORT GUIDELINES & EVIDENCE-BASED PRACTICES ═══\n`;
-    context += `(Information from official guideline documents. CITE the source when using this information.)\n`;
-    context += `IMPORTANT: This section is for clinical guidance, best practices, and policy reference ONLY. Do NOT use addresses, phone numbers, or contact details from this section. For agency contact information, ONLY use the VERIFIED RESOURCES section below.\n\n`;
-    guidelineSnippets.forEach((g, i) => {
-      context += `📖 Source: "${g.source}"\n`;
-      context += `${g.content}\n\n`;
-    });
-    context += `═══ END OF GUIDELINES ═══\n`;
-    context += `CITATION INSTRUCTIONS: When referencing guideline content above, cite the source document name (e.g., "According to the Health Services guidelines..." or "Per the Peer Specialist Training Manual...").\n\n`;
-  }
-
-  // ── Agency directory section with proximity-based filtering ──
+  // ── Agency directory section FIRST (highest priority for the model) ──
+  // Placing verified resources before guidelines ensures the model sees
+  // structured data first and uses it for addresses/phones/contact details.
   if (resources.length > 0) {
     // Sort by distance (nearest first), then exact zip, then borough
     resources.sort((a, b) => {
@@ -1659,7 +2003,7 @@ function buildResourceContext(searchResults, location) {
       }
     }
 
-    context += `\n═══ VERIFIED RESOURCES FROM NYC AGENCY DIRECTORY (1,016 agencies) ═══\n`;
+    context += `\n═══ VERIFIED RESOURCES FROM NYC AGENCY DIRECTORY (942 agencies) ═══\n`;
     context += `(These are REAL agencies with verified addresses and phone numbers. Present them with full details. Do NOT use placeholders.)\n`;
     if (targetZip) context += `Client's zip code: ${targetZip}`;
     if (targetBorough) context += ` (${targetBorough})`;
@@ -1689,6 +2033,7 @@ function buildResourceContext(searchResults, location) {
       else context += `   Phone: Not listed — call 311 for info\n`;
       if (r.hours) context += `   Hours: ${r.hours}\n`;
       if (r.notes) context += `   Notes: ${r.notes}\n`;
+      context += `   Source: NYC Agency Directory (verified)\n`;
       context += `\n`;
     });
 
@@ -1703,6 +2048,51 @@ function buildResourceContext(searchResults, location) {
     context += `7. Do NOT invent, hallucinate, or add placeholder resource details.\n`;
     context += `8. If none match the client's need, say so honestly and suggest calling 311 or NYC Well (1-888-692-9355).\n`;
     context += `9. If an agency appears in both the GUIDELINES and VERIFIED RESOURCES sections, ALWAYS use the address and phone from THIS section — the structured directory is the authoritative source for contact details.\n`;
+  }
+
+  // ── SAMHSA Live Results section ──
+  if (samhsaResults && samhsaResults.length > 0) {
+    context += `\n═══ LIVE SAMHSA TREATMENT FACILITIES (FindTreatment.gov — Real-Time Data) ═══\n`;
+    context += `(These are LIVE results from SAMHSA's national treatment locator. Addresses and phones are current.)\n`;
+    context += `NOTE: These facilities are federally verified treatment providers. Include [SAMHSA Live Data] tag when presenting.\n\n`;
+
+    samhsaResults.forEach((r, i) => {
+      const facilityLabel = r.facilityType === 'OTP' ? 'Opioid Treatment Program (OTP)'
+        : r.facilityType === 'BUPREN' ? 'Buprenorphine Provider'
+        : r.facilityType === 'NTXN' ? 'Naltrexone Provider'
+        : r.facilityType || 'Treatment Provider';
+
+      const fullAddress = [r.address, r.city, r.state, r.zipcode].filter(Boolean).join(', ');
+      const distTag = r.miles !== undefined ? ` (${r.miles} mi)` : '';
+
+      context += `${i + 1}. **${r.name}**${distTag} [SAMHSA Live Data]\n`;
+      if (r.name2) context += `   Alt name: ${r.name2}\n`;
+      context += `   Type: ${facilityLabel}\n`;
+      if (fullAddress) context += `   Address: ${fullAddress}\n`;
+      if (r.phone) context += `   Phone: ${r.phone}\n`;
+      if (r.intake) context += `   Intake: ${r.intake}\n`;
+      if (r.hotline) context += `   Hotline: ${r.hotline}\n`;
+      if (r.website) context += `   Website: ${r.website}\n`;
+      context += `   Source: SAMHSA FindTreatment.gov (live federal data)\n`;
+      context += `\n`;
+    });
+
+    context += `═══ END OF SAMHSA RESULTS ═══\n`;
+    context += `When presenting SAMHSA facilities, include the [SAMHSA Live Data] tag and mention that this is current, federally verified data.\n`;
+  }
+
+  // ── Guideline/PDF knowledge section (AFTER verified resources) ──
+  // Guidelines are placed AFTER agency data so the model prioritizes structured data for contact details.
+  if (guidelineSnippets.length > 0) {
+    context += `\n\n═══ PEER SUPPORT GUIDELINES & EVIDENCE-BASED PRACTICES ═══\n`;
+    context += `(Information from official guideline documents. CITE the source when using this information.)\n`;
+    context += `⚠️ IMPORTANT: This section is for clinical guidance, best practices, and policy reference ONLY. Do NOT use addresses, phone numbers, or contact details from this section. For agency contact information, ONLY use the VERIFIED RESOURCES or SAMHSA sections ABOVE.\n\n`;
+    guidelineSnippets.forEach((g, i) => {
+      context += `📖 Source: "${g.source}"\n`;
+      context += `${g.content}\n\n`;
+    });
+    context += `═══ END OF GUIDELINES ═══\n`;
+    context += `CITATION INSTRUCTIONS: When referencing guideline content above, cite the source document name (e.g., "According to the Health Services guidelines..." or "Per the Peer Specialist Training Manual...").\n\n`;
   }
 
   if (!context) return "";
@@ -2015,12 +2405,16 @@ export default async function handler(req) {
       }
     }
 
-    // ── Detect if this is a referral email request ──
-    const wantsReferralEmail = isReferralEmailRequest(message);
+    // ── Detect if this is a warm handoff phone script request (check BEFORE referral email) ──
+    const wantsWarmHandoff = isWarmHandoffRequest(message);
+    console.log("[AI-PEER-ASSIST] Warm handoff request?", wantsWarmHandoff);
+
+    // ── Detect if this is a referral email request (only if NOT warm handoff) ──
+    const wantsReferralEmail = !wantsWarmHandoff && isReferralEmailRequest(message);
     console.log("[AI-PEER-ASSIST] Referral email request?", wantsReferralEmail);
 
     // ── Detect if this is a note generation request ──
-    const wantsNote = !wantsReferralEmail && isNoteRequest(message);
+    const wantsNote = !wantsReferralEmail && !wantsWarmHandoff && isNoteRequest(message);
     const noteFormat = wantsNote ? detectNoteFormat(message) : null;
 
     console.log("[AI-PEER-ASSIST] Note request?", wantsNote, noteFormat);
@@ -2050,9 +2444,15 @@ export default async function handler(req) {
       let agencyContext = "";
       const searchLocation = (location.zipcode || location.borough) ? location : null;
       try {
-        const searchResults = await searchVertexAI(message, accessToken, searchLocation, history);
-        if (searchResults.length > 0) {
-          agencyContext = buildResourceContext(searchResults, location);
+        // Run Vertex AI Search + SAMHSA in parallel for SUD referrals
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
+          ? searchSAMHSA(location.zipcode)
+          : Promise.resolve([]);
+
+        const [searchResults, samhsaResults] = await Promise.all([searchPromise, samhsaPromise]);
+        if (searchResults.length > 0 || samhsaResults.length > 0) {
+          agencyContext = buildResourceContext(searchResults, location, samhsaResults);
         }
       } catch (searchError) {
         console.warn("[AI-PEER-ASSIST] Search for referral email failed", { message: searchError?.message });
@@ -2068,6 +2468,34 @@ export default async function handler(req) {
       contents.push({ role: "user", parts: [{ text: emailPrompt }] });
       console.log("[AI-PEER-ASSIST] Generating referral email");
 
+    } else if (wantsWarmHandoff) {
+      // WARM HANDOFF PHONE SCRIPT MODE
+      let agencyContext = "";
+      const searchLocation = (location.zipcode || location.borough) ? location : null;
+      try {
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
+          ? searchSAMHSA(location.zipcode)
+          : Promise.resolve([]);
+
+        const [searchResults, samhsaResults] = await Promise.all([searchPromise, samhsaPromise]);
+        if (searchResults.length > 0 || samhsaResults.length > 0) {
+          agencyContext = buildResourceContext(searchResults, location, samhsaResults);
+        }
+      } catch (searchError) {
+        console.warn("[AI-PEER-ASSIST] Search for warm handoff failed", { message: searchError?.message });
+      }
+
+      systemPrompt = WARM_HANDOFF_INSTRUCTIONS;
+
+      let handoffPrompt = `Generate a warm handoff phone script based on our conversation. ${message}`;
+      if (agencyContext) {
+        handoffPrompt += `\n\n--- AVAILABLE AGENCY CONTEXT ---\n${agencyContext}`;
+      }
+
+      contents.push({ role: "user", parts: [{ text: handoffPrompt }] });
+      console.log("[AI-PEER-ASSIST] Generating warm handoff phone script");
+
     } else if (wantsNote) {
       // NOTE GENERATION MODE
       const template = FORMAT_TEMPLATES[noteFormat] || FORMAT_TEMPLATES.BIRP;
@@ -2075,9 +2503,17 @@ export default async function handler(req) {
         .replace('%%FORMAT%%', noteFormat)
         .replace('%%FORMAT_TEMPLATE%%', template);
 
+      // Extract structured session data to improve note completeness
+      const sessionData = extractSessionFields(history);
+      let notePrompt = `Generate a ${noteFormat} clinical note based on everything we discussed in this session. ${message}`;
+      if (sessionData) {
+        notePrompt = sessionData + notePrompt;
+        console.log("[AI-PEER-ASSIST] Prepended structured session data to note prompt");
+      }
+
       contents.push({
         role: "user",
-        parts: [{ text: `Generate a ${noteFormat} clinical note based on everything we discussed in this session. ${message}` }]
+        parts: [{ text: notePrompt }]
       });
 
       console.log(`[AI-PEER-ASSIST] Generating ${noteFormat} note from conversation`);
@@ -2090,14 +2526,23 @@ export default async function handler(req) {
         // ALWAYS search — guidelines (PDFs) are useful for ANY peer support question
         // Pass location if we have it for local resource matching; pass null to still get guideline hits
         const searchLocation = (location.zipcode || location.borough) ? location : null;
-        const searchResults = await searchVertexAI(message, accessToken, searchLocation, history);
 
-        if (searchResults.length > 0) {
-          // Use the rich resource context builder
-          searchContext = buildResourceContext(searchResults, location);
+        // Run Vertex AI Search + SAMHSA in parallel for SUD queries
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
+          ? searchSAMHSA(location.zipcode)
+          : Promise.resolve([]);
+
+        const [searchResults, samhsaResults] = await Promise.all([searchPromise, samhsaPromise]);
+
+        if (searchResults.length > 0 || samhsaResults.length > 0) {
+          // Use the rich resource context builder with SAMHSA results
+          searchContext = buildResourceContext(searchResults, location, samhsaResults);
 
           console.log("[AI-PEER-ASSIST] Built resource context", {
-            resourceCount: searchResults.length,
+            resourceCount: searchResults.filter(r => r.document?.structData).length,
+            guidelineCount: searchResults.filter(r => !r.document?.structData).length,
+            samhsaCount: samhsaResults.length,
             contextLength: searchContext.length,
             hasLocation: !!(location.zipcode || location.borough)
           });
@@ -2142,15 +2587,24 @@ export default async function handler(req) {
 *I apologize for the inconvenience. Please try your question again.*`;
     }
 
+    // ── Post-response safety check (output scanning for scope violations) ──
+    if (!wantsNote && !wantsReferralEmail && !wantsWarmHandoff) {
+      const safetyDisclaimers = postResponseSafetyCheck(response, message);
+      if (safetyDisclaimers) {
+        response += safetyDisclaimers;
+        console.log("[AI-PEER-ASSIST] Post-response safety check triggered disclaimers");
+      }
+    }
+
     // ── Proactive screening suggestions (only in guidance mode, not resource lookups) ──
     let screeningSuggestions = null;
     const isResourceLookup = /\b(address|location|where is|agency|center|service center|tell me about|find me|near|close to|directions|hours|phone number)\b/i.test(message);
-    if (!wantsNote && !wantsReferralEmail && !isResourceLookup) {
+    if (!wantsNote && !wantsReferralEmail && !wantsWarmHandoff && !isResourceLookup) {
       const suggestions = detectScreeningNeed(message, history);
       if (suggestions.length > 0) {
         screeningSuggestions = suggestions;
-        const suggestionText = suggestions.map(s => `- **${s.form}**: ${s.reason}`).join('\n');
-        response += `\n\n---\n\n### 📋 Screening Suggestion\nBased on this conversation, you might consider administering:\n${suggestionText}\n\nWould you like me to walk you through any of these screenings? Just say "start [form name]" (e.g., "start PHQ-9").`;
+        // NOTE: Screening suggestions are NO LONGER appended to response text.
+        // The frontend renders them as a separate clickable card using data.screeningSuggestions.
       }
     }
 
@@ -2160,7 +2614,7 @@ export default async function handler(req) {
     }
 
     // Determine response mode
-    const responseMode = wantsReferralEmail ? 'referral_email' : (wantsNote ? 'note' : 'guidance');
+    const responseMode = wantsReferralEmail ? 'referral_email' : wantsWarmHandoff ? 'warm_handoff' : (wantsNote ? 'note' : 'guidance');
 
     console.log("[AI-PEER-ASSIST] Response generated", {
       length: response.length,
@@ -2170,11 +2624,21 @@ export default async function handler(req) {
       phiDetected: detectedPHI.length > 0
     });
 
+    // ── Build needs map (only for guidance mode with enough history) ──
+    let needsMap = null;
+    if (responseMode === 'guidance' && history && history.length >= 2) {
+      needsMap = buildNeedsMap(history);
+      if (needsMap) {
+        console.log("[AI-PEER-ASSIST] Needs map generated", { domains: Object.keys(needsMap) });
+      }
+    }
+
     return new Response(JSON.stringify({
       response,
       mode: responseMode,
       noteFormat: noteFormat,
-      screeningSuggestions
+      screeningSuggestions,
+      needsMap
     }), {
       status: 200,
       headers: H
