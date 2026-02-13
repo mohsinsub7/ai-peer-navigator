@@ -1396,6 +1396,65 @@
       .message.assistant .message-content.note-output { max-width: 95%; }
     }
 
+    /* ── CLIENT MODAL ── */
+    .client-modal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .client-modal-content {
+      background: var(--card);
+      border-radius: 12px;
+      box-shadow: var(--shadow-lg);
+      width: 480px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .client-modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .client-modal-header button {
+      background: none;
+      border: none;
+      font-size: 18px;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    #client-list-items {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .client-entry {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .client-entry:hover {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist-item { padding: 5px 0; font-size: 12px; border-bottom: 1px solid var(--border); }
+    .checklist-item:last-child { border-bottom: none; }
+    .checklist-item.checked label { text-decoration: line-through; color: var(--muted); }
+    .checklist-item input[type="checkbox"] { margin-right: 8px; accent-color: var(--accent); }
+
     /* ── SCROLLBAR ── */
     .messages::-webkit-scrollbar { width: 6px; }
     .messages::-webkit-scrollbar-track { background: transparent; }
@@ -1413,6 +1472,7 @@
         <div class="sub">Evidence-based peer support guidance</div>
       </div>
       <div class="flex-grow"></div>
+      <button class="btn" onclick="showClientModal()" aria-label="View saved clients">📋 Clients</button>
       <button class="btn" id="btn-clear" aria-label="Clear conversation session">Clear Session</button>
       <a class="btn" href="index.html" aria-label="Return to home page">← Home</a>
     </div>
@@ -1504,6 +1564,17 @@
       </div>
     </aside>
   </main>
+
+  <!-- Client Sessions Modal -->
+  <div class="client-modal" id="client-modal">
+    <div class="client-modal-content">
+      <div class="client-modal-header">
+        <span>📋 Client Sessions</span>
+        <button onclick="closeClientModal()" aria-label="Close">&times;</button>
+      </div>
+      <div id="client-list-items"></div>
+    </div>
+  </div>
 
   <script>
     const messagesDiv = document.getElementById('messages');
@@ -1769,10 +1840,14 @@
 
       // 2. Split response by ### headers into sections
       const sections = responseText.split(/^### /gm).filter(Boolean);
-      for (const section of sections) {
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
         const firstLine = section.split('\n')[0].trim();
         const body = section.substring(section.indexOf('\n') + 1).trim();
         if (!firstLine) continue;
+
+        // Skip preamble text (empathy line before first ### header) — it's rendered in chat as recommended response
+        if (i === 0 && !/[🔴🟡🟢🔗📍❓🗣✅💬🎯📋⚠]/.test(firstLine)) continue;
 
         if (/🔴/.test(firstLine)) cards.push({ type: 'triage-today', title: '### ' + firstLine, body });
         else if (/🟡/.test(firstLine)) cards.push({ type: 'triage-week', title: '### ' + firstLine, body });
@@ -2004,11 +2079,11 @@
         if (r.program || r.program_name) html += `<div class="resource-detail">${escapeHtml(r.program || r.program_name)}</div>`;
         if (r.address) {
           html += `<div class="resource-detail">📍 ${escapeHtml(r.address)}</div>`;
-          // Transit directions link
-          const clientZip = window._clientZip || '';
-          const origin = clientZip ? encodeURIComponent(clientZip + ', New York, NY') : encodeURIComponent('New York, NY');
-          const dest = encodeURIComponent(r.address);
-          html += `<div class="resource-detail"><a href="https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=transit" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:11px;">🚇 Transit Directions (Trains/Buses)</a></div>`;
+          // Inline transit hint based on zip code
+          const subwayHint = getSubwayHint(r.zipcode);
+          if (subwayHint) {
+            html += `<div class="resource-detail" style="color:#1e40af;font-size:11px;">🚇 ${escapeHtml(subwayHint)}</div>`;
+          }
         }
         if (r.phone || r.phone_number) html += `<div class="resource-detail">📞 ${escapeHtml(r.phone || r.phone_number)}</div>`;
         if (r.hours || r.operating_hours) html += `<div class="resource-detail">🕐 ${escapeHtml(r.hours || r.operating_hours)}</div>`;
@@ -2105,6 +2180,223 @@
       _activeFilters.clear();
       _lastRiskTier = null;
       _lastBarriers = [];
+    }
+
+    // ── NYC SUBWAY HINT BY ZIP CODE ──
+    function getSubwayHint(zip) {
+      const z = parseInt(zip);
+      if (!z) return null;
+      // Manhattan
+      if (z >= 10001 && z <= 10005) return 'Near 34th St–Penn Stn (1/2/3/A/C/E)';
+      if (z >= 10006 && z <= 10007) return 'Near Fulton St (2/3/4/5/A/C/J/Z)';
+      if (z >= 10009 && z <= 10014) return 'Near 14th St–Union Sq (4/5/6/L/N/Q/R/W)';
+      if (z >= 10016 && z <= 10018) return 'Near 34th St–Herald Sq (B/D/F/M/N/Q/R/W)';
+      if (z >= 10019 && z <= 10022) return 'Near Times Sq–42 St (1/2/3/7/N/Q/R/W/S)';
+      if (z >= 10023 && z <= 10025) return 'Near 96th St (1/2/3/B/C)';
+      if (z >= 10026 && z <= 10031) return 'Near 125th St (A/B/C/D/2/3)';
+      if (z >= 10032 && z <= 10034) return 'Near 168th St (A/C/1)';
+      if (z >= 10035 && z <= 10037) return 'Near 125th St (4/5/6)';
+      if (z >= 10038 && z <= 10040) return 'Near 175th St (A) or 181st St (1)';
+      if (z === 10044) return 'F at Roosevelt Island';
+      if (z >= 10065 && z <= 10075) return 'Near Lexington Ave/63rd St (F/Q) or 68th St (6)';
+      if (z >= 10128 && z <= 10162) return 'Near 86th St (4/5/6/Q)';
+      // Bronx
+      if (z >= 10451 && z <= 10452) return 'Near 149th St–Grand Concourse (2/4/5)';
+      if (z >= 10453 && z <= 10455) return 'Near 3rd Ave–149th St (2/5)';
+      if (z >= 10456 && z <= 10458) return 'Near Fordham Rd (4/B/D)';
+      if (z >= 10459 && z <= 10462) return 'Near Parkchester (6) or E 180th St (2/5)';
+      if (z >= 10463 && z <= 10471) return 'Near 231st St (1) or Kingsbridge Rd (4)';
+      if (z >= 10472 && z <= 10475) return 'Near Westchester Sq (6) or Pelham Bay (6)';
+      // Brooklyn
+      if (z >= 11201 && z <= 11202) return 'Near Atlantic Ave–Barclays (2/3/4/5/B/D/N/Q/R)';
+      if (z >= 11203 && z <= 11205) return 'Near Nostrand Ave (A/C) or Kingston Ave (3)';
+      if (z >= 11206 && z <= 11208) return 'Near Broadway Junction (A/C/J/Z/L)';
+      if (z >= 11209 && z <= 11214) return 'Near 36th St (D/N/R) or Bay Ridge Ave (R)';
+      if (z >= 11215 && z <= 11218) return 'Near 7th Ave (F/G) or Prospect Park (B/Q/S)';
+      if (z >= 11219 && z <= 11224) return 'Near Coney Island–Stillwell Ave (D/F/N/Q)';
+      if (z >= 11225 && z <= 11226) return 'Near Church Ave (B/Q/2/5)';
+      if (z >= 11228 && z <= 11236) return 'Near Flatbush Ave (2/5) or Canarsie (L)';
+      if (z === 11211 || z === 11222) return 'Near Bedford Ave (L) or Greenpoint Ave (G)';
+      if (z >= 11237 && z <= 11239) return 'Near Myrtle-Wyckoff (L/M)';
+      if (z >= 11249 && z <= 11256) return 'Near Marcy Ave (J/M/Z)';
+      // Queens
+      if (z >= 11101 && z <= 11106) return 'Near Queensboro Plaza (7/N/W)';
+      if (z === 11109) return 'Near Vernon Blvd–Jackson Ave (7)';
+      if (z >= 11354 && z <= 11358) return 'Near Flushing–Main St (7)';
+      if (z >= 11360 && z <= 11364) return 'LIRR to Bayside or Q13 bus';
+      if (z >= 11365 && z <= 11368) return 'Near Mets–Willets Point (7)';
+      if (z >= 11369 && z <= 11375) return 'Near Jackson Hts–Roosevelt Ave (7/E/F/M/R)';
+      if (z >= 11377 && z <= 11385) return 'Near Middle Village (M) or Myrtle-Wyckoff (L/M)';
+      if (z >= 11411 && z <= 11436) return 'Near Jamaica Center (E/J/Z)';
+      if (z >= 11691 && z <= 11697) return 'Near Far Rockaway (A) or Rockaway shuttle';
+      // Staten Island
+      if (z >= 10301 && z <= 10314) return 'SIR from St George + Staten Island Ferry';
+      return null;
+    }
+
+    // ── CLIENT LIST MANAGEMENT (localStorage persistence) ──
+    const CLIENTS_KEY = 'ai_peer_clients';
+
+    function loadClients() {
+      try { return JSON.parse(localStorage.getItem(CLIENTS_KEY) || '{}'); }
+      catch { return {}; }
+    }
+
+    function saveClientsData(clients) {
+      localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+    }
+
+    function saveClientSession(clientName) {
+      const clients = loadClients();
+      const id = 'c_' + Date.now();
+
+      // Auto-extract needs from conversation
+      const allText = conversationHistory.map(h => h.text || '').join(' ').toLowerCase();
+      const needs = [];
+      if (/hous|shelter|evict|homeless/.test(allText)) needs.push('Housing');
+      if (/food|hungry|pantry|snap|meals/.test(allText)) needs.push('Food');
+      if (/substance|drug|alcohol|drink|heroin|fentanyl|recovery/.test(allText)) needs.push('SUD');
+      if (/depress|anxiety|mental health|suicid|therapy/.test(allText)) needs.push('Mental Health');
+      if (/employ|job|work|career/.test(allText)) needs.push('Employment');
+      if (/medicaid|benefits|insurance|ssi/.test(allText)) needs.push('Benefits');
+      if (/domestic violence|ipv|dv|safe horizon/.test(allText)) needs.push('DV/Safety');
+      if (/legal|court|probation/.test(allText)) needs.push('Legal');
+
+      clients[id] = {
+        id,
+        name: clientName,
+        created: Date.now(),
+        lastSession: Date.now(),
+        riskTier: _lastRiskTier || 'GREEN',
+        needs,
+        barriers: _lastBarriers || [],
+        history: conversationHistory,
+        checklist: [
+          { text: 'Confirm contact made — Call client to confirm they reached the agency', done: false },
+          { text: 'Verify appointment — Was intake scheduled? Date: ___', done: false },
+          { text: 'Check for barriers — Transportation, ID, eligibility, wait list issues', done: false },
+          { text: 'Document outcome — Update chart with referral status (connected/pending/declined)', done: false },
+          { text: 'Schedule next session — Set date for next peer session: ___', done: false },
+        ]
+      };
+
+      saveClientsData(clients);
+      return id;
+    }
+
+    function renderClientModal() {
+      const clients = loadClients();
+      const list = document.getElementById('client-list-items');
+      const entries = Object.values(clients).sort((a, b) => b.lastSession - a.lastSession);
+
+      if (entries.length === 0) {
+        list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">No saved clients yet.<br>Sessions are saved when you clear a session.</div>';
+        return;
+      }
+
+      list.innerHTML = entries.map(c => {
+        const date = new Date(c.lastSession).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const riskClass = (c.riskTier || 'GREEN').toLowerCase();
+        const msgCount = (c.history || []).filter(h => h.role === 'user').length;
+        const checkDone = (c.checklist || []).filter(cl => cl.done).length;
+        const checkTotal = (c.checklist || []).length;
+        const needsHtml = (c.needs || []).map(n => `<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600;">${escapeHtml(n)}</span>`).join(' ');
+
+        return `<div class="client-entry" onclick="openClient('${c.id}')">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-weight:700;font-size:13px;">${escapeHtml(c.name)}</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="risk-tier-badge ${riskClass}" style="display:inline-block;font-size:9px;padding:1px 6px;">${c.riskTier || 'GREEN'}</span>
+              <button onclick="event.stopPropagation();deleteClient('${c.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;" title="Delete">\u2715</button>
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">${date} \u2022 ${msgCount} messages</div>
+          <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${needsHtml}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">\u2611 Follow-up: ${checkDone}/${checkTotal} complete</div>
+        </div>`;
+      }).join('');
+    }
+
+    function openClient(clientId) {
+      const clients = loadClients();
+      const client = clients[clientId];
+      if (!client) return;
+
+      // Close modal
+      document.getElementById('client-modal').style.display = 'none';
+
+      // Load client session
+      conversationHistory = client.history || [];
+      _lastRiskTier = client.riskTier;
+      _lastBarriers = client.barriers || [];
+
+      // Rebuild chat from history
+      messagesDiv.innerHTML = '';
+      const welcome = document.createElement('div');
+      welcome.className = 'message assistant';
+      welcome.innerHTML = `<div class="message-content"><strong>Session loaded for ${escapeHtml(client.name)}</strong> \u2014 ${conversationHistory.filter(h => h.role === 'user').length} previous messages. You can continue the conversation.</div>`;
+      messagesDiv.appendChild(welcome);
+
+      for (const turn of conversationHistory) {
+        const msg = document.createElement('div');
+        if (turn.role === 'user') {
+          msg.className = 'message user';
+          msg.innerHTML = `<div class="message-content">${escapeHtml(turn.text)}</div>`;
+        } else {
+          msg.className = 'message assistant';
+          msg.innerHTML = `<div class="message-content">${parseMarkdown(turn.text || '')}</div>`;
+        }
+        messagesDiv.appendChild(msg);
+      }
+
+      // Render follow-up checklist in a chat message
+      if (client.checklist && client.checklist.length > 0) {
+        const checkMsg = document.createElement('div');
+        checkMsg.className = 'message assistant';
+        let checkHtml = '<div class="message-content" style="background:#fffbeb;border-color:#fbbf24;"><strong>\ud83d\udccb Follow-Up Checklist</strong><ul class="checklist" style="margin-top:8px;">';
+        client.checklist.forEach((item, idx) => {
+          const checkedAttr = item.done ? 'checked' : '';
+          const checkedClass = item.done ? 'checked' : '';
+          checkHtml += `<li class="checklist-item ${checkedClass}"><label><input type="checkbox" ${checkedAttr} onchange="updateClientChecklist('${clientId}', ${idx}, this.checked)"> ${escapeHtml(item.text)}</label></li>`;
+        });
+        checkHtml += '</ul></div>';
+        checkMsg.innerHTML = checkHtml;
+        messagesDiv.appendChild(checkMsg);
+      }
+
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      updateRiskTierBadge(client.riskTier);
+      renderBarrierChips(client.barriers || []);
+      saveSession();
+      updateSessionInfo();
+    }
+
+    function updateClientChecklist(clientId, itemIndex, checked) {
+      const clients = loadClients();
+      if (clients[clientId] && clients[clientId].checklist[itemIndex] !== undefined) {
+        clients[clientId].checklist[itemIndex].done = checked;
+        saveClientsData(clients);
+        // Toggle visual
+        const item = event.target.closest('.checklist-item');
+        if (item) item.classList.toggle('checked', checked);
+      }
+    }
+
+    function deleteClient(clientId) {
+      if (!confirm('Delete this client session permanently?')) return;
+      const clients = loadClients();
+      delete clients[clientId];
+      saveClientsData(clients);
+      renderClientModal();
+    }
+
+    function showClientModal() {
+      document.getElementById('client-modal').style.display = 'flex';
+      renderClientModal();
+    }
+
+    function closeClientModal() {
+      document.getElementById('client-modal').style.display = 'none';
     }
 
     // ── RENDER NOTE/EMAIL/HANDOFF IN ACTION PANEL ──
@@ -2348,24 +2640,81 @@
           </div>`;
 
         } else if (isScreening) {
-          // Render screening in action panel + compact chat note
+          // Render screening INLINE in chat with clickable answer buttons
           const prog = data.screeningProgress || {};
-          renderScreeningInActionPanel(data, responseText);
-          loadingMsg.innerHTML = `<div class="message-content">
-            <em>${escapeHtml(prog.formName || 'Screening')} — Question ${prog.questionNumber || '?'} of ${prog.totalQuestions || '?'}. See action panel.</em>
-          </div>`;
+          const pct = prog.progress != null ? Math.round(prog.progress * 100) : 0;
+
+          let screenHtml = `<div class="message-content screening-output">
+            <div class="screening-progress">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <span>${escapeHtml(prog.formName || 'Screening')} — Q${prog.questionNumber || '?'}/${prog.totalQuestions || '?'}</span>
+                <button onclick="cancelScreening()" style="background:none;border:1px solid #94a3b8;color:#64748b;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:10px;">Cancel</button>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+            </div>
+            ${parseMarkdown(responseText)}`;
+
+          // Quick-response clickable buttons
+          const optionMatches = responseText.match(/\*\*(\d+)\*\* — (.+)/g);
+          if (optionMatches) {
+            screenHtml += '<div class="screening-options">';
+            optionMatches.forEach(match => {
+              const parts = match.match(/\*\*(\d+)\*\* — (.+)/);
+              if (parts) {
+                screenHtml += `<button class="screening-option-btn" onclick="sendScreeningResponse('${parts[1]}')">${parts[1]} — ${escapeHtml(parts[2])}</button>`;
+              }
+            });
+            screenHtml += '</div>';
+          }
+          screenHtml += '</div>';
+          loadingMsg.innerHTML = screenHtml;
           announceToScreenReader(`Screening question ${prog.questionNumber} of ${prog.totalQuestions}`);
 
         } else if (isScreeningComplete) {
-          // Render screening complete in action panel + compact chat note
+          // Render screening results INLINE in chat with score + next steps
           const result = data.screeningResult || {};
-          renderScreeningCompleteInActionPanel(data, responseText);
-          const safetyFlag = (result.suicidalIdeation || result.selfHarmFlag || result.acute) ? ' ⚠ SAFETY FLAG' : '';
-          loadingMsg.innerHTML = `<div class="message-content">
-            <strong>${escapeHtml(result.formName || 'Screening')} complete — Score: ${result.score}/${result.maxScore} (${escapeHtml(result.severity || 'N/A')}).${safetyFlag}</strong>
-            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See full results in Action Panel →</div>
+          window._lastScreeningResult = result;
+
+          let sevClass = 'severity-minimal';
+          const sevLower = (result.severity || '').toLowerCase();
+          if (/severe|high|probable|positive|dependence|harmful/.test(sevLower)) sevClass = 'severity-severe';
+          else if (/moderate|borderline|hazardous/.test(sevLower)) sevClass = 'severity-moderate';
+          else if (/mild/.test(sevLower)) sevClass = 'severity-mild';
+
+          const safetyFlag = (result.suicidalIdeation || result.selfHarmFlag || result.acute);
+          const formName = escapeHtml(result.formName || 'Screening');
+          const score = result.score || 0;
+          const severity = escapeHtml(result.severity || 'N/A');
+
+          let completeHtml = `<div class="message-content screening-complete-output">
+            <div class="screening-complete-header">
+              <span>${formName} — Complete</span>
+              <div>
+                <button class="copy-btn" onclick="downloadScreeningPDF()">PDF</button>
+                <button class="copy-btn" style="margin-left:4px;" onclick="copyNote(this)">Copy</button>
+              </div>
+            </div>
+            <div class="screening-result-body">
+              <div style="display:flex;gap:14px;align-items:flex-start;">
+                <div style="text-align:center;min-width:70px;">
+                  <div style="font-size:32px;font-weight:800;color:var(--text);">${score}</div>
+                  <div style="font-size:10px;color:var(--muted);">out of ${result.maxScore}</div>
+                  <div class="severity-label ${sevClass}" style="margin-top:4px;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">${severity}</div>
+                </div>
+                <div style="flex:1;font-size:12px;">
+                  ${result.recommendation ? '<p style="margin-bottom:4px;">' + escapeHtml(result.recommendation) + '</p>' : ''}
+                  ${result.zone ? '<p style="color:var(--muted);font-size:10px;">Risk Zone: ' + escapeHtml(result.zone) + '</p>' : ''}
+                </div>
+              </div>
+              ${safetyFlag ? '<div class="screening-safety-alert">⚠ SAFETY FLAG — Immediate Review Required</div>' : ''}
+              <div style="margin-top:10px;display:flex;gap:6px;">
+                <button class="btn primary" style="flex:1;font-size:11px;padding:6px 12px;border-radius:6px;" onclick="sendMessage('Based on the ${formName} score of ${score} (${severity}), what are the recommended next steps and which resources should I connect the client with?')">📋 Next Steps & Resources</button>
+              </div>
+            </div>
           </div>`;
-          announceToScreenReader(`Screening complete. Score: ${result.score} out of ${result.maxScore}. Severity: ${result.severity}`);
+
+          loadingMsg.innerHTML = completeHtml;
+          announceToScreenReader(`Screening complete. Score: ${score} out of ${result.maxScore}. Severity: ${result.severity}`);
 
         } else {
           // ── GUIDANCE MODE: Dual rendering — compact chat + full action cards ──
@@ -2413,9 +2762,18 @@
           updateSnapshotBar(data, text);
 
           // ── Chat gets compact version ──
-          // Find first empathy/intro line (not a ### header)
+          // Find first empathy/intro line (not a ### header) for recommended response
           const lines = responseText.split('\n');
           const firstLine = lines.find(l => l.trim() && !l.startsWith('###') && !l.startsWith('---')) || '';
+
+          // Render empathy line as a recommended response to say to client
+          let empathyHtml = '';
+          if (firstLine.trim()) {
+            empathyHtml = `<div style="margin-bottom:8px;">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">💬 RECOMMENDED RESPONSE TO CLIENT</div>
+              <div style="padding:8px 12px;font-size:13px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;color:#166534;font-style:italic;line-height:1.5;">${parseMarkdown(firstLine)}</div>
+            </div>`;
+          }
 
           // Safety banner for chat (compact version)
           let chatSafetyHtml = '';
@@ -2430,7 +2788,7 @@
             </div>`;
           }
 
-          // ── Extract unblocker questions from response (### ❓ section) ──
+          // ── Extract unblocker questions from response (### ❓ section) ── display only, NOT clickable
           let unblockerHtml = '';
           const unblockerMatch = responseText.match(/### ❓[^\n]*\n([\s\S]*?)(?=### |$)/);
           if (unblockerMatch) {
@@ -2439,9 +2797,9 @@
               .filter(l => l.length > 5 && !l.startsWith('---'));
             if (ubLines.length > 0) {
               unblockerHtml = `<div style="margin-top:8px;">
-                <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">❓ MORE INFO NEEDED</div>
+                <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">❓ ASK THE CLIENT</div>
                 <div style="display:flex;flex-direction:column;gap:4px;">
-                  ${ubLines.slice(0, 3).map(q => `<button class="suggestion-btn" style="text-align:left;padding:5px 8px;font-size:11px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('user-input').value=this.textContent;document.getElementById('user-input').focus();">${escapeHtml(q)}</button>`).join('')}
+                  ${ubLines.slice(0, 3).map(q => `<div style="padding:5px 8px;font-size:11px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px;color:#1e40af;">${escapeHtml(q)}</div>`).join('')}
                 </div>
               </div>`;
             }
@@ -2481,7 +2839,7 @@
 
           loadingMsg.innerHTML = `<div class="message-content">
             ${chatSafetyHtml}
-            <p>${parseMarkdown(firstLine)}</p>
+            ${empathyHtml}
             ${unblockerHtml}
             ${suggestedQHtml}
             ${needsMapHtml}
@@ -2658,26 +3016,33 @@
       });
     });
 
-    // Clear session (with optional session summary)
+    // Clear session (with optional session summary + client save)
     clearBtn.addEventListener('click', () => {
       if (conversationHistory.length < 4) {
-        // Not enough history for a summary — just clear
-        if (confirm('Clear this session?')) {
-          performClearSession();
+        // Not enough history — offer to save for a client then clear
+        const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
+        if (saveName && saveName.trim()) {
+          saveClientSession(saveName.trim());
         }
+        performClearSession();
         return;
       }
 
       const choice = confirm('Would you like a session summary before clearing?\n\nOK = Generate summary, then clear\nCancel = Clear without summary');
       if (choice) {
-        // Generate summary then clear
         generateSessionSummary().then(() => {
+          const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
+          if (saveName && saveName.trim()) {
+            saveClientSession(saveName.trim());
+          }
           performClearSession();
         });
       } else {
-        if (confirm('Clear this session? All conversation history will be lost.')) {
-          performClearSession();
+        const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
+        if (saveName && saveName.trim()) {
+          saveClientSession(saveName.trim());
         }
+        performClearSession();
       }
     });
 

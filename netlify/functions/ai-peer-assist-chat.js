@@ -1013,14 +1013,16 @@ function parseScreeningResponse(input, options) {
 }
 
 // ── SCREENING NEED DETECTION (proactive suggestion) ──
-// Only scans the CURRENT message (not full history) to avoid irrelevant suggestions
-// on follow-up questions. E.g., mentioning "marijuana" once shouldn't trigger DAST-10
-// on every subsequent message about unrelated topics.
+// Scans CURRENT message AND recent conversation history to detect screening needs.
+// Uses the full context to recommend appropriate screenings (e.g., if client mentions
+// "drinking to sleep" earlier, AUDIT should still be suggested on follow-up messages).
 function detectScreeningNeed(message, history) {
-  const allText = message;
+  // Build full conversation text (user messages only — model responses can contain screening terms falsely)
+  const userTexts = (history || []).filter(h => h.role === 'user').map(h => h.text || '');
+  const allText = [message, ...userTexts].join(' ');
   const suggestions = [];
 
-  if (/\b(depress|sad|hopeless|crying|no energy|can't sleep|lost interest|worthless|guilt)\b/i.test(allText)) {
+  if (/\b(depress|sad|hopeless|crying|no energy|can't sleep|lost interest|worthless|guilt|don'?t want to wake up)\b/i.test(allText)) {
     suggestions.push({ form: "PHQ-4", reason: "Client may be experiencing depressive symptoms" });
   }
   if (/\b(anxious|anxiety|worry|worried|nervous|panic|can't relax|on edge|restless)\b/i.test(allText)) {
@@ -1029,13 +1031,13 @@ function detectScreeningNeed(message, history) {
   if (/\b(trauma|ptsd|nightmare|flashback|assault|abuse|violence|combat)\b/i.test(allText)) {
     suggestions.push({ form: "PC-PTSD-5", reason: "Client may have trauma/PTSD indicators" });
   }
-  if (/\b(drink|alcohol|beer|wine|liquor|blackout|hungover)\b/i.test(allText)) {
+  if (/\b(drink|drinking|drunk|alcohol|beer|wine|liquor|blackout|hungover|sip|sipping)\b/i.test(allText)) {
     suggestions.push({ form: "AUDIT", reason: "Client mentions alcohol use" });
   }
-  if (/\b(drug|cocaine|heroin|fentanyl|meth|pill|substance|using|high|inject)\b/i.test(allText)) {
+  if (/\b(drug|cocaine|heroin|fentanyl|meth|pill|substance|using|high|inject|street pill)\b/i.test(allText)) {
     suggestions.push({ form: "DAST-10", reason: "Client mentions drug use" });
   }
-  if (/\b(suicid|kill (my|him|her|them)self|want to die|better off dead|self.?harm)\b/i.test(allText)) {
+  if (/\b(suicid|kill (my|him|her|them)self|want to die|better off dead|self.?harm|don'?t want to wake up)\b/i.test(allText)) {
     suggestions.push({ form: "ASQ", reason: "Client may be at suicide risk" });
   }
   if (/\b(pregnant|postpartum|baby|birth|maternal|perinatal|new mom|new mother)\b/i.test(allText)) {
@@ -1286,10 +1288,12 @@ When the navigator needs to discuss behavior change with a client, suggest MI te
 Every response MUST follow this sequence. Skip steps that don't apply to the query.
 
 ### Step 1: EMPATHY LINE (1 sentence max)
-Strengths-based, person-centered opening. Examples:
+Strengths-based, person-centered opening that is a recommended response for the navigator to say to the client.
+Examples:
 - "Thanks for sharing — let's tackle this step-by-step."
 - "It sounds like your client is dealing with a lot — here's what I'd prioritize."
 Do NOT use generic platitudes. Acknowledge the SPECIFIC situation.
+IMPORTANT: This empathy line should be plain text BEFORE any ### headers. Do NOT put it inside a ### section. It will be rendered separately as a recommended response in the chat.
 
 ### Step 2: SAFETY CHECK (only if risk cues present)
 Match to the risk tier provided in the system hint:
