@@ -1014,34 +1014,102 @@ function parseScreeningResponse(input, options) {
 
 // ── SCREENING NEED DETECTION (proactive suggestion) ──
 // Scans CURRENT message AND recent conversation history to detect screening needs.
-// Uses the full context to recommend appropriate screenings (e.g., if client mentions
-// "drinking to sleep" earlier, AUDIT should still be suggested on follow-up messages).
+// Uses clinical presentation patterns, not just keyword matching — identifies appropriate
+// screenings based on the client's complaints, behaviors, and context holistically.
 function detectScreeningNeed(message, history) {
   // Build full conversation text (user messages only — model responses can contain screening terms falsely)
   const userTexts = (history || []).filter(h => h.role === 'user').map(h => h.text || '');
   const allText = [message, ...userTexts].join(' ');
+  const lower = allText.toLowerCase();
   const suggestions = [];
 
-  if (/\b(depress|sad|hopeless|crying|no energy|can't sleep|lost interest|worthless|guilt|don'?t want to wake up)\b/i.test(allText)) {
-    suggestions.push({ form: "PHQ-4", reason: "Client may be experiencing depressive symptoms" });
+  // ── DEPRESSION / MOOD (PHQ-4 → PHQ-9 follow-up) ──
+  const depressionCues = /\b(depress|sad|hopeless|crying|no energy|can't sleep|lost interest|worthless|guilt|don'?t want to wake up|empty|numb|irritable|mood swings?|weight (gain|loss)|appetite (change|loss|increase)|fatigue|tired all the time|can'?t (concentrate|focus)|slow|low mood|feeling (down|blue|flat)|no motivation|not enjoying|stopped doing|isolat(ed|ing)|withdrawn|shut down)\b/i;
+  if (depressionCues.test(allText)) {
+    suggestions.push({ form: "PHQ-4", reason: "Client presents with possible depressive symptoms — quick 4-item screen covers both depression & anxiety" });
   }
-  if (/\b(anxious|anxiety|worry|worried|nervous|panic|can't relax|on edge|restless)\b/i.test(allText)) {
-    suggestions.push({ form: "GAD-7", reason: "Client may be experiencing anxiety symptoms" });
+
+  // ── ANXIETY ──
+  const anxietyCues = /\b(anxious|anxiety|worry|worried|nervous|panic|can't relax|on edge|restless|racing (thoughts|heart|mind)|pounding heart|chest tight|hard to breathe|hyperventilat|sweating|trembl|shak(y|ing)|dread|phobia|afraid|scared all the time|avoidance|can'?t (sit still|calm down)|agitat(ed|ion)|keyed up|tense|overthinking|intrusive thoughts)\b/i;
+  if (anxietyCues.test(allText)) {
+    suggestions.push({ form: "GAD-7", reason: "Client describes anxiety-related symptoms" });
   }
-  if (/\b(trauma|ptsd|nightmare|flashback|assault|abuse|violence|combat)\b/i.test(allText)) {
-    suggestions.push({ form: "PC-PTSD-5", reason: "Client may have trauma/PTSD indicators" });
+
+  // ── TRAUMA / PTSD ──
+  const traumaCues = /\b(trauma|ptsd|nightmare|flashback|assault|abuse|violence|combat|sexual abuse|molest|rape|attack(ed)?|witness(ed)?.*death|car accident|fire|stabbed|shot|beat(en|ing)|jump(ed|y)|hypervigilant|startl(e|ed)|avoid(ing|ance).*remind|can'?t (stop thinking|forget)|trigger(ed|s)?|domestic violence|ipv|incarcerat(ed|ion)|prison|jail|foster care|system involvement|aces|adverse childhood)\b/i;
+  if (traumaCues.test(allText)) {
+    suggestions.push({ form: "PC-PTSD-5", reason: "Client may have trauma exposure or PTSD indicators" });
   }
-  if (/\b(drink|drinking|drunk|alcohol|beer|wine|liquor|blackout|hungover|sip|sipping)\b/i.test(allText)) {
-    suggestions.push({ form: "AUDIT", reason: "Client mentions alcohol use" });
+
+  // ── ALCOHOL USE ──
+  const alcoholCues = /\b(drink|drinking|drunk|alcohol|beer|wine|liquor|blackout|hungover|sip|sipping|bar|booze|bottle|flask|vodka|whiskey|tequila|six.?pack|40s|handle|dui|dwi|need(ed|s)? a drink|drink(ing)? to (cope|sleep|forget|relax|numb)|morning drink|can'?t stop drinking|binge|wasted|hammered|buzzed|tipsy)\b/i;
+  if (alcoholCues.test(allText)) {
+    suggestions.push({ form: "AUDIT", reason: "Client's presentation suggests alcohol use screening is indicated" });
   }
-  if (/\b(drug|cocaine|heroin|fentanyl|meth|pill|substance|using|high|inject|street pill)\b/i.test(allText)) {
-    suggestions.push({ form: "DAST-10", reason: "Client mentions drug use" });
+
+  // ── DRUG USE ──
+  const drugCues = /\b(drug|cocaine|heroin|fentanyl|meth|pill|substance|using|high|inject|street pill|marijuana|weed|cannabis|molly|ecstasy|crack|oxy|perc|xan(ax|ny)|benzo|k2|spice|angel dust|pcp|lean|codeine|promethazine|smoke|smok(ed|ing).*not (tobacco|cigarette)|snort|dip|nod(ding|ded)|track marks|works|rig|needle|bag|bundle|stamp|cop(ping|ped)|stash|dope|fiend|fix|jones(ing)?|crystal|ice|speed|crank|rock|pipe|paraphernalia|positive (tox|urine|drug test)|dirty (urine|test)|clean time|relapse|slip(ped)?|fell off|went back out)\b/i;
+  if (drugCues.test(allText)) {
+    suggestions.push({ form: "DAST-10", reason: "Client's presentation suggests drug use screening is indicated" });
   }
-  if (/\b(suicid|kill (my|him|her|them)self|want to die|better off dead|self.?harm|don'?t want to wake up)\b/i.test(allText)) {
-    suggestions.push({ form: "ASQ", reason: "Client may be at suicide risk" });
+
+  // ── SUICIDE RISK ──
+  const suicideCues = /\b(suicid|kill (my|him|her|them)self|want to die|better off dead|self.?harm|don'?t want to wake up|end (my|it|their|his|her) (life|all)|not (want to|wanna) be here|what'?s the point|no reason to (live|keep going)|cutting|overdos(e|ed|ing)|hurt(ing)? (my|him|her|them)self|wish I (was|were) dead|thought(s)? (about|of) (dying|death|not being)|plan to (hurt|harm|die)|disappear|jump|hang|gun|weapon)\b/i;
+  if (suicideCues.test(allText)) {
+    suggestions.push({ form: "ASQ", reason: "Client may be at suicide risk — brief 4-question screen recommended" });
   }
-  if (/\b(pregnant|postpartum|baby|birth|maternal|perinatal|new mom|new mother)\b/i.test(allText)) {
-    suggestions.push({ form: "EPDS", reason: "Client is perinatal/postpartum" });
+
+  // ── PERINATAL / POSTPARTUM ──
+  const perinatalCues = /\b(pregnant|postpartum|baby|birth|maternal|perinatal|new mom|new mother|expecting|trimester|delivery|newborn|breastfeed|postnatal|just had a baby|gave birth|maternity|ob.?gyn|prenatal|morning sickness|miscarriage|stillbirth|nicu|bonding.*baby|infant|6 weeks|overwhelmed.*(baby|infant|newborn)|crying.*(baby|all the time)|can'?t (bond|connect).*(baby|child))\b/i;
+  if (perinatalCues.test(allText)) {
+    suggestions.push({ form: "EPDS", reason: "Client is perinatal/postpartum — Edinburgh screen recommended" });
+  }
+
+  // ── MULTI-SUBSTANCE / COMPREHENSIVE (ASSIST) ──
+  // Suggest ASSIST when multiple substances are mentioned or poly-substance use is implied
+  const multiSubstanceCues = /\b(multiple (substance|drug)|poly.?substance|several (drug|substance)|mix(ing|ed) (substance|drug)|cross.?faded|using (everything|multiple|several|different))\b/i;
+  const substanceCount = [alcoholCues, drugCues].filter(p => p.test(allText)).length;
+  if (multiSubstanceCues.test(allText) || substanceCount >= 2) {
+    suggestions.push({ form: "ASSIST", reason: "Multiple substance use indicators — comprehensive WHO ASSIST recommended" });
+  }
+
+  // ── YOUTH/ADOLESCENT SUBSTANCE USE ──
+  const youthCues = /\b(teenager|adolescent|teen|youth|juvenile|minor|school.age|high school|middle school|\b1[3-7]\s*(year|yr|y\.?o)|young (person|man|woman|client))\b/i;
+  if (youthCues.test(allText) && (alcoholCues.test(allText) || drugCues.test(allText))) {
+    suggestions.push({ form: "CRAFFT", reason: "Youth/adolescent with substance use concerns — CRAFFT 2.0 recommended" });
+  }
+
+  // ── CLINICAL PRESENTATION PATTERNS (cross-cutting) ──
+  // Sleep disturbance → could be depression, anxiety, PTSD, or SUD
+  const sleepIssues = /\b(can'?t sleep|insomnia|not sleeping|sleep(ing)? (too much|all day)|up all night|waking up (screaming|sweating|shaking)|night terrors|restless (sleep|nights?))\b/i;
+  if (sleepIssues.test(allText) && suggestions.length === 0) {
+    suggestions.push({ form: "PHQ-4", reason: "Sleep disturbance reported — quick screen to assess for underlying depression/anxiety" });
+  }
+
+  // Somatic complaints with no medical cause → anxiety or depression
+  const somaticCues = /\b(headache|stomach (ache|pain|problems)|chest (pain|tightness)|body (aches|pain)|dizzy|nauseous|can'?t eat|throwing up|shaking|sweating for no reason|heart (pounding|racing))\b/i;
+  if (somaticCues.test(allText) && !anxietyCues.test(allText) && !depressionCues.test(allText) && suggestions.length === 0) {
+    suggestions.push({ form: "PHQ-4", reason: "Somatic complaints may indicate underlying mood/anxiety — quick screen recommended" });
+  }
+
+  // Behavioral cues that imply substance use without naming a substance
+  const impliedSUD = /\b(can'?t stop|lost (control|everything)|ruined my (life|marriage|family|relationships)|spending all (my money|the money)|pawned|sold (my|everything)|kicked out.*(using|habit|behavior)|stealing|shoplift|withdrawal|sick without|dopesick|coming down|need(ed)? it to (function|feel normal|get through))\b/i;
+  if (impliedSUD.test(allText) && !alcoholCues.test(allText) && !drugCues.test(allText)) {
+    suggestions.push({ form: "CAGE-AID", reason: "Behavioral pattern suggests possible substance use — quick CAGE-AID screen recommended" });
+  }
+
+  // Functional impairment cues → screen broadly
+  const functionalCues = /\b(can'?t (work|hold a job|function|take care|get out of bed|leave the house)|lost my job|fired|not functioning|falling apart|shut down|stopped (showering|eating|going out|caring)|giving up|life is falling apart)\b/i;
+  if (functionalCues.test(allText) && suggestions.length === 0) {
+    suggestions.push({ form: "PHQ-4", reason: "Significant functional impairment described — quick screen to identify primary concern" });
+  }
+
+  // De-duplicate: if both PHQ-4 and GAD-7 suggested, keep both (complementary)
+  // If AUDIT + DAST-10 + ASSIST, keep ASSIST as the comprehensive option and one specific
+  const formIds = suggestions.map(s => s.form);
+  if (formIds.includes('ASSIST') && formIds.includes('AUDIT') && formIds.includes('DAST-10')) {
+    // Remove AUDIT and DAST-10 when ASSIST covers both
+    return suggestions.filter(s => s.form !== 'AUDIT' && s.form !== 'DAST-10');
   }
 
   return suggestions;

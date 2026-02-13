@@ -1857,7 +1857,7 @@
         else if (/❓/.test(firstLine)) { /* Unblocker questions rendered in chat */ }
         else if (/🗣/.test(firstLine)) { /* Suggested client questions rendered in chat */ }
         else if (/✅/.test(firstLine)) cards.push({ type: 'actions', title: '### ' + firstLine, body });
-        else if (/💬/.test(firstLine)) cards.push({ type: 'say', title: '### ' + firstLine, body });
+        else if (/💬/.test(firstLine)) { /* What to Say rendered in chat, not action panel */ }
         else if (/🎯/.test(firstLine)) cards.push({ type: 'quick', title: '### ' + firstLine, body });
         else if (/📋/.test(firstLine)) cards.push({ type: 'checklist', title: '### ' + firstLine, body });
         else if (/⚠/.test(firstLine)) cards.push({ type: 'safety', title: '### ' + firstLine, body, tier: data.riskTier });
@@ -2805,6 +2805,23 @@
             }
           }
 
+          // ── Extract "What to Say" from response (### 💬 section) → rendered in chat ──
+          let whatToSayHtml = '';
+          const sayMatch = responseText.match(/### 💬[^\n]*\n([\s\S]*?)(?=### |$)/);
+          if (sayMatch) {
+            const sayLines = sayMatch[1].split('\n')
+              .map(l => l.replace(/^[-•*\d.)\s]+/, '').trim())
+              .filter(l => l.length > 5 && !l.startsWith('---'));
+            if (sayLines.length > 0) {
+              whatToSayHtml = `<div style="margin-top:8px;">
+                <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">💬 WHAT TO SAY TO CLIENT</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  ${sayLines.slice(0, 5).map(l => `<div style="padding:6px 10px;font-size:12px;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;color:#065f46;line-height:1.5;font-style:italic;">"${escapeHtml(l)}"</div>`).join('')}
+                </div>
+              </div>`;
+            }
+          }
+
           // ── Extract suggested questions for client (### 🗣️ section) ──
           let suggestedQHtml = '';
           const suggestedMatch = responseText.match(/### 🗣[^\n]*\n([\s\S]*?)(?=### |$)/);
@@ -2840,6 +2857,7 @@
           loadingMsg.innerHTML = `<div class="message-content">
             ${chatSafetyHtml}
             ${empathyHtml}
+            ${whatToSayHtml}
             ${unblockerHtml}
             ${suggestedQHtml}
             ${needsMapHtml}
