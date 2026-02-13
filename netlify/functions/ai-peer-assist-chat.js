@@ -2346,8 +2346,26 @@ function buildResourceContext(searchResults, location, samhsaResults = []) {
     context += `CITATION INSTRUCTIONS: When referencing guideline content above, cite the source document name (e.g., "According to the Health Services guidelines..." or "Per the Peer Specialist Training Manual...").\n\n`;
   }
 
+  // ── Merge SAMHSA results into structuredResources for frontend resource panel ──
+  const allResources = [...(filteredResources || resources)];
+  if (samhsaResults && samhsaResults.length > 0) {
+    for (const sr of samhsaResults) {
+      allResources.push({
+        name: sr.name,
+        program: sr.name2 || sr.facilityType || 'Treatment Provider',
+        address: [sr.address, sr.city, sr.state, sr.zipcode].filter(Boolean).join(', '),
+        phone: sr.phone || sr.intake || sr.hotline || '',
+        hours: sr.intake ? `Intake: ${sr.intake}` : '',
+        notes: sr.website ? `Website: ${sr.website}` : '',
+        category: 'sud_treatment',
+        _distanceMiles: sr.miles !== undefined ? Math.round(sr.miles * 10) / 10 : undefined,
+        _source: 'SAMHSA',
+      });
+    }
+  }
+
   if (!context) return { contextString: "", structuredResources: [], guidelineSnippets: [] };
-  return { contextString: context, structuredResources: filteredResources || resources, guidelineSnippets };
+  return { contextString: context, structuredResources: allResources, guidelineSnippets };
 }
 
 // ── RETRY HELPER (deadline-aware) ──
@@ -2880,12 +2898,12 @@ export default async function handler(req) {
       contents.push({ role: "user", parts: [{ text: userPrompt }] });
 
       // ── Dynamic generation config for complex cases ──
+      // NOTE: thinkingLevel stays LOW for ALL cases. HIGH/MEDIUM adds 5-10s latency
+      // which exceeds the 24.5s deadline on complex queries (search + SAMHSA + auth overhead).
+      // The system prompt's triage format (🔴/🟡/🟢) handles complex case structuring.
       if (multiNeeds && multiNeeds.count >= 3) {
         generationConfigOverride = {
-          maxOutputTokens: 8192,  // Keep same as default — 12288 caused consistent timeouts
-          thinkingConfig: {
-            thinkingLevel: "HIGH",  // Complex multi-need cases benefit from deeper reasoning
-          },
+          maxOutputTokens: 8192,
         };
       }
     }

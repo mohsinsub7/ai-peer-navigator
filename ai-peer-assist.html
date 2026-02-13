@@ -1899,7 +1899,7 @@
       const map = {
         'shelter': 'Housing', 'housing': 'Housing', 'family_shelter': 'Housing', 'drop_in': 'Housing',
         'food': 'Food', 'meals': 'Food', 'pantry': 'Food', 'snap': 'Food',
-        'sud': 'SUD', 'substance': 'SUD', 'detox': 'SUD', 'harm_reduction': 'SUD', 'naloxone': 'SUD', 'treatment': 'SUD',
+        'sud': 'SUD', 'substance': 'SUD', 'detox': 'SUD', 'harm_reduction': 'SUD', 'naloxone': 'SUD', 'treatment': 'SUD', 'sud_treatment': 'SUD Treatment',
         'mental_health': 'MH', 'counseling': 'MH', 'therapy': 'MH', 'psychiatric': 'MH',
         'dv': 'DV/Legal', 'domestic_violence': 'DV/Legal', 'legal': 'DV/Legal', 'legal_aid': 'DV/Legal',
         'employment': 'Jobs', 'workforce': 'Jobs', 'job': 'Jobs', 'career': 'Jobs',
@@ -1995,7 +1995,7 @@
         if (r.eligibility) html += `<div class="resource-detail">✓ ${escapeHtml(r.eligibility)}</div>`;
         if (r._distanceMiles !== undefined) html += `<div class="resource-distance">${r._distanceMiles} mi</div>`;
         // Source ID
-        const sourceId = r._source === 'samhsa' ? `API-${r.frid || ''}` : `LS-${r.id || r._index || ''}`;
+        const sourceId = (r._source === 'SAMHSA' || r._source === 'samhsa') ? 'SAMHSA Live' : `LS-`;
         html += `<div class="resource-source">Source: ${escapeHtml(sourceId)}</div>`;
         el.innerHTML = html;
         container.appendChild(el);
