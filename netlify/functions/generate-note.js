@@ -25,7 +25,7 @@ export default async (req) => {
           context: process.env.CONTEXT || "unknown",
           ai_provider: process.env.AI_PROVIDER || "google",
           gemini_key_present: Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY),
-          gemini_model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+          gemini_model: process.env.GEMINI_MODEL || "gemini-3-flash-preview",
           timestamp: new Date().toISOString()
         },
         null,
@@ -76,7 +76,7 @@ export default async (req) => {
 
   const PROVIDER = process.env.AI_PROVIDER || "google";
   const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
-  const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 
   if (PROVIDER === "google" && !GEMINI_KEY) {
     return json(
@@ -225,7 +225,7 @@ TAGS=${(tags || []).join(", ")}`;
   const body = {
     systemInstruction: { role: "system", parts: [{ text: system }] },
     contents: [{ role: "user", parts: [{ text: user }] }],
-    generationConfig: { temperature: 0.1, top_p: 0.9, response_mime_type: "application/json" }
+    generationConfig: { temperature: 1.0, top_p: 0.95, response_mime_type: "application/json", thinkingConfig: { thinkingLevel: "LOW" } }
   };
 
   let lastErr;

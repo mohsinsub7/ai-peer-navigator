@@ -120,21 +120,24 @@
     .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     .btn.primary:hover { background: var(--accent-hover); }
 
-    /* ── MAIN LAYOUT ── */
+    /* ── MAIN LAYOUT (3-panel grid) ── */
     main {
-      display: flex;
+      display: grid;
+      grid-template-columns: minmax(380px, 1fr) 340px 260px;
+      grid-template-rows: 1fr;
       height: calc(100vh - 61px);
-      max-width: 1440px;
+      max-width: 1600px;
       margin: 0 auto;
       overflow: hidden;
+      gap: 0;
     }
 
-    /* ── CHAT AREA ── */
+    /* ── CHAT AREA (column 1) ── */
     .chat-container {
-      flex: 1;
       display: flex;
       flex-direction: column;
       min-width: 0;
+      overflow: hidden;
     }
 
     .messages {
@@ -553,6 +556,78 @@
       color: #0369a1;
     }
 
+    /* ── Triage sections (complex multi-need cases) ── */
+    .message.assistant .message-content .section-triage-today {
+      background: #fef2f2;
+      border-left: 3px solid #ef4444;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+    .message.assistant .message-content .section-triage-week {
+      background: #fefce8;
+      border-left: 3px solid #f59e0b;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+    .message.assistant .message-content .section-triage-long {
+      background: #f0fdf4;
+      border-left: 3px solid #22c55e;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+    .message.assistant .message-content .section-barrier-buster {
+      background: #eff6ff;
+      border-left: 3px solid #3b82f6;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin: 8px 0;
+    }
+    .section-header.triage-today { color: #dc2626; }
+    .section-header.triage-week { color: #d97706; }
+    .section-header.triage-long { color: #16a34a; }
+    .section-header.barrier-buster { color: #2563eb; }
+
+    /* ── Safety banners (risk-tier UI) ── */
+    .safety-check-banner {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      margin-bottom: 10px;
+      line-height: 1.5;
+    }
+    .safety-check-banner.yellow {
+      background: #fefce8;
+      border: 1px solid #fde047;
+      color: #854d0e;
+    }
+    .safety-check-banner .safety-actions {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+    }
+    .safety-protocol-card.orange {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .safety-protocol-card .safety-protocol-header {
+      font-weight: 700;
+      font-size: 14px;
+      color: #c2410c;
+      margin-bottom: 8px;
+    }
+    .safety-protocol-card ol {
+      margin: 0;
+      padding-left: 20px;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
     ul.checklist {
       list-style: none;
       padding-left: 0;
@@ -715,6 +790,11 @@
       position: relative;
       overflow-x: hidden;
       word-wrap: break-word;
+      display: block;
+    }
+
+    .message.assistant .message-content.crisis-output > div {
+      display: block;
     }
 
     .crisis-header {
@@ -862,18 +942,364 @@
       border-color: var(--accent);
     }
 
-    /* ── SIDEBAR ── */
-    .sidebar {
-      width: 280px;
-      background: var(--sidebar-bg);
+    /* ── ACTION PANEL (column 2) ── */
+    .action-panel {
       border-left: 1px solid var(--border);
       display: flex;
       flex-direction: column;
-      gap: 0;
+      background: var(--bg);
+      overflow: hidden;
+    }
+    .action-panel-header {
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-height: 42px;
+    }
+    .action-panel-header .panel-title {
+      flex-shrink: 0;
+      color: var(--text);
+    }
+    .risk-tier-badge {
+      display: inline-flex;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .risk-tier-badge.green { background: #dcfce7; color: #166534; }
+    .risk-tier-badge.yellow { background: #fef9c3; color: #854d0e; }
+    .risk-tier-badge.orange { background: #fed7aa; color: #9a3412; }
+    .risk-tier-badge.red { background: #fecaca; color: #991b1b; }
+    .barrier-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .barrier-chip {
+      display: inline-flex;
+      padding: 2px 7px;
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: 600;
+      color: #991b1b;
+      white-space: nowrap;
+    }
+    .action-cards {
+      flex: 1;
       overflow-y: auto;
-      padding: 14px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .action-cards::-webkit-scrollbar { width: 5px; }
+    .action-cards::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .action-empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 20px;
+    }
+    .action-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: var(--shadow-md);
+    }
+    .action-card-header {
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 14px;
+      letter-spacing: 0.01em;
+      border-bottom: 1px solid var(--border);
+    }
+    .action-card-header.triage-today { background: #fee2e2; color: #b91c1c; border-left: 4px solid #ef4444; }
+    .action-card-header.triage-week { background: #fef3c7; color: #92400e; border-left: 4px solid #f59e0b; }
+    .action-card-header.triage-long { background: #dcfce7; color: #15803d; border-left: 4px solid #22c55e; }
+    .action-card-header.barrier-buster { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+    .action-card-header.actions { background: #d1fae5; color: #065f46; border-left: 4px solid #10b981; }
+    .action-card-header.resources { background: #ede9fe; color: #5b21b6; border-left: 4px solid #8b5cf6; }
+    .action-card-header.say { background: #d1fae5; color: #047857; border-left: 4px solid #10b981; }
+    .action-card-header.quick { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+    .action-card-header.checklist { background: #e0f2fe; color: #075985; border-left: 4px solid #0ea5e9; }
+    .action-card-header.generic { background: var(--bg); color: var(--text); border-left: 4px solid var(--border); }
+    .action-card-body {
+      padding: 10px 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .action-card-body ul, .action-card-body ol {
+      margin: 4px 0;
+      padding-left: 16px;
+    }
+    .action-card-body li { margin: 4px 0; }
+    .action-card-body strong { color: var(--text); }
+    .generate-card {
+      padding: 10px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .generate-card .btn { font-size: 11px; padding: 6px 10px; }
+
+    /* ── Sources drawer (bottom of action panel) ── */
+    .sources-drawer {
+      border-top: 1px solid var(--border);
+      background: var(--card);
+    }
+    .sources-toggle {
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 8px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sources-toggle:hover { background: var(--bg); }
+    .sources-content {
+      max-height: 200px;
+      overflow-y: auto;
+      padding: 0 12px 8px;
+    }
+    .source-item {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .source-item:last-child { border-bottom: none; }
+    .source-name { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .source-snippet { color: var(--muted); line-height: 1.4; }
+
+    /* ── RESOURCE PANEL (column 3) ── */
+    .resource-panel {
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      background: var(--sidebar-bg);
+      overflow: hidden;
+    }
+    .resource-panel-header {
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      min-height: 42px;
+      display: flex;
+      align-items: center;
+    }
+    .resource-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+    }
+    .resource-tab {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      transition: all 0.15s;
+      color: var(--text-secondary);
+    }
+    .resource-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .resource-tab.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .resource-cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .resource-cards::-webkit-scrollbar { width: 5px; }
+    .resource-cards::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+    .resource-empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+      padding: 20px;
+    }
+    .resource-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font-size: 11px;
+    }
+    .resource-name { font-weight: 700; font-size: 12px; color: var(--text); margin-bottom: 3px; }
+    .resource-detail { color: var(--text-secondary); margin: 1px 0; font-size: 11px; }
+    .resource-distance {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      margin-top: 3px;
+    }
+    .resource-source { font-size: 9px; color: var(--muted); margin-top: 3px; }
+    .resource-copy-btn { margin-top: 4px; font-size: 10px; padding: 3px 8px; }
+    .resource-panel-footer {
+      border-top: 1px solid var(--border);
+    }
+    .resource-panel-footer .warning-card {
+      background: #fef3c7;
+      border: 1px solid #fcd34d;
+      border-radius: 8px;
+      padding: 8px 10px;
+      margin: 8px;
+    }
+    .resource-panel-footer .warning-card h3 {
+      font-size: 10px;
+      font-weight: 700;
+      color: #92400e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .resource-panel-footer .warning-card p {
+      font-size: 11px;
+      color: #78350f;
+      line-height: 1.4;
     }
 
+    /* ── Snapshot chips (session context in left panel header) ── */
+    .snapshot-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card);
+      font-size: 10px;
+    }
+    .snapshot-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 7px;
+      background: #f1f5f9;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+    .snapshot-chip.missing { background: #fef2f2; border-color: #fca5a5; color: #991b1b; }
+    .snapshot-chip.set { background: #f0fdf4; border-color: #86efac; color: #166534; }
+
+    /* ── Data capture card (missing fields) ── */
+    .action-card-header.data-capture { background: #fefce8; color: #92400e; }
+    .data-field-chip {
+      display: inline-flex;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 600;
+      margin: 2px;
+    }
+    .data-field-chip.missing { background: #fef2f2; border: 1px solid #fca5a5; color: #991b1b; }
+    .data-field-chip.captured { background: #f0fdf4; border: 1px solid #86efac; color: #166534; text-decoration: line-through; opacity: 0.7; }
+
+    /* ── Safety protocol card ── */
+    .action-card-header.safety { background: #fee2e2; color: #991b1b; border-left: 4px solid #ef4444; }
+    .action-card-header.safety.orange { background: #fed7aa; color: #9a3412; border-left: 4px solid #f97316; }
+    .action-card-header.safety.yellow { background: #fef3c7; color: #854d0e; border-left: 4px solid #eab308; }
+    .action-card-header.safety.red { background: #fecaca; color: #991b1b; border-left: 4px solid #dc2626; }
+
+    /* ── Screening suggest card in action panel ── */
+    .action-card-header.screening-suggest { background: #dbeafe; color: #1e40af; border-left: 4px solid #3b82f6; }
+    .screening-suggest-body { padding: 10px 14px; }
+    .screening-suggest-body .suggestion-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 6px 10px;
+      margin: 4px 0;
+      background: var(--accent-light);
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+    }
+    .screening-suggest-body .suggestion-btn:hover { background: var(--accent); color: #fff; }
+
+    /* ── Resource filters ── */
+    .resource-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 3px;
+      padding: 4px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .resource-filter {
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 9px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      background: var(--card);
+      cursor: pointer;
+      color: var(--text-secondary);
+    }
+    .resource-filter.active { background: #f0fdf4; border-color: #86efac; color: #166534; }
+    .resource-filter:hover { border-color: var(--accent); }
+
+    /* ── See-cards link in chat ── */
+    .see-cards-link {
+      margin-top: 8px;
+      padding: 6px 10px;
+      background: var(--accent-light);
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .see-cards-link:hover { background: var(--accent); color: #fff; }
+
+    /* Legacy sidebar-card kept for resource panel footer */
     .sidebar-card {
       background: var(--card);
       border: 1px solid var(--border);
@@ -882,7 +1308,6 @@
       margin-bottom: 12px;
       box-shadow: var(--shadow-sm);
     }
-
     .sidebar-card h3 {
       font-size: 11px;
       font-weight: 700;
@@ -891,44 +1316,10 @@
       letter-spacing: 0.6px;
       margin-bottom: 10px;
     }
-
     .sidebar-card p {
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.55;
-    }
-
-    .feature-list {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .feature-list li {
-      font-size: 12px;
-      line-height: 1.5;
-      color: var(--text-secondary);
-      padding: 6px 8px;
-      background: var(--bg);
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
-    .feature-list li strong {
-      color: var(--text);
-      display: block;
-      font-size: 12px;
-      margin-bottom: 2px;
-    }
-    .feature-list li em {
-      color: var(--accent);
-      font-style: normal;
-      font-weight: 600;
-      font-size: 11px;
-      background: var(--accent-light);
-      padding: 1px 5px;
-      border-radius: 3px;
     }
 
     .tags { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -980,18 +1371,20 @@
     }
 
     /* ── RESPONSIVE ── */
-    @media (max-width: 900px) {
-      main { flex-direction: column; }
-      .sidebar {
-        width: 100%;
-        flex-direction: row;
-        padding: 10px;
-        overflow-x: auto;
-        border-left: none;
-        border-top: 1px solid var(--border);
-        order: -1;
+    /* Tablet: 2-column — chat + resources; action panel hidden (content goes inline) */
+    @media (max-width: 1200px) {
+      main {
+        grid-template-columns: 1fr 260px;
       }
-      .sidebar-card { flex-shrink: 0; width: 220px; margin-bottom: 0; margin-right: 10px; }
+      .action-panel { display: none; }
+    }
+    /* Mobile: 1-column — everything inline */
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .action-panel { display: none; }
+      .resource-panel { display: none; }
       .message-content { max-width: 95%; }
       .message.assistant .message-content { max-width: 95%; }
       .message.assistant .message-content.note-output { max-width: 95%; }
@@ -1025,13 +1418,14 @@
         <div class="message assistant">
           <div class="message-content">
             <strong>Welcome to AI Peer Assist</strong><br><br>
-            I'm here to support you during client visits. Tell me about your client's situation and I'll provide guidance, resources, and action steps.<br><br>
-            When you're done, ask me to <strong>generate a SOAP, DAP, GIRP, or BIRP note</strong> and I'll create a chart-ready clinical note from our conversation.<br><br>
-            <em>I remember everything in this session — even if you refresh the page.</em>
+            Describe your client's situation and I'll provide triage, action cards, matched resources, and workflow steps in the panels to the right.<br><br>
+            Try: <em>"start PHQ-9"</em> for screenings, <em>"write a referral email"</em>, or <em>"warm handoff script"</em>.<br><br>
+            <em style="color:var(--muted);">Session notes are stored temporarily in your browser and can be cleared anytime.</em>
           </div>
         </div>
       </div>
 
+      <div class="snapshot-bar" id="snapshot-bar" style="display:none;"></div>
       <div class="input-section">
         <div class="input-row">
           <label for="user-input" class="sr-only">Message input</label>
@@ -1053,43 +1447,55 @@
       </div>
     </div>
 
-    <aside class="sidebar" role="complementary" aria-label="Quick tools and information">
-      <div class="sidebar-card">
-        <h3>🛠️ What I Can Do</h3>
-        <ul class="feature-list">
-          <li><strong>🔍 Screenings</strong> — 12 validated tools (PHQ-9, GAD-7, AUDIT, PC-PTSD-5, DAST-10, ASQ, CRAFFT, EPDS, and more). Say <em>"start PHQ-9"</em> to begin. Download PDF results when done.</li>
-          <li><strong>📋 Clinical Notes</strong> — Generate chart-ready SOAP, DAP, GIRP, or BIRP notes from our conversation. Use the buttons below the chat.</li>
-          <li><strong>📧 Referral Emails</strong> — Draft professional referral emails. Say <em>"write a referral email"</em>.</li>
-          <li><strong>📞 Warm Handoff Scripts</strong> — Get a phone script for calling agencies. Say <em>"warm handoff script"</em>.</li>
-          <li><strong>📍 Resource Finder</strong> — Search 942+ NYC agencies by zip code. Include a location like <em>"food pantry near 10451"</em>.</li>
-          <li><strong>💊 SAMHSA Live Search</strong> — Real-time substance use treatment facility data from FindTreatment.gov.</li>
-          <li><strong>🚨 Crisis Detection</strong> — Auto-detects safety concerns and provides crisis resources (988, 911, Safe Horizon).</li>
-          <li><strong>🗺️ Needs Tracking</strong> — Automatically maps SDoH domains (housing, food, MH, SUD, benefits, etc.) across the session.</li>
-        </ul>
+    <!-- ── ACTION PANEL (column 2) ── -->
+    <div class="action-panel" id="action-panel" role="complementary" aria-label="Action cards and workflow">
+      <div class="action-panel-header">
+        <span class="panel-title">Action Cards</span>
+        <span class="risk-tier-badge green" id="risk-tier-badge" style="display:none;"></span>
+        <div class="barrier-chips" id="barrier-chips"></div>
       </div>
-
-      <div class="sidebar-card">
-        <h3>Quick Start</h3>
-        <div class="tags">
-          <div class="tag" data-prompt="My client is hungry and needs food assistance today">🍽️ Food</div>
-          <div class="tag" data-prompt="Client needs emergency shelter tonight">🏠 Shelter</div>
-          <div class="tag" data-prompt="Client is in recovery and needs substance use treatment">💊 Recovery</div>
-          <div class="tag" data-prompt="Client needs help with Medicaid enrollment">📋 Benefits</div>
-          <div class="tag" data-prompt="start PHQ-4">🔍 Quick Screen</div>
-          <div class="tag" data-prompt="Client needs a job and has no work history">💼 Employment</div>
-        </div>
-        <div class="status" style="margin-top:10px;">
-          <div class="status-dot"></div>
-          <span>Session memory active</span>
+      <div class="action-cards" id="action-cards">
+        <div class="action-empty-state" id="action-empty-state">
+          <div>
+            <p style="margin-bottom:8px;">Action cards appear here as you discuss your client's situation.</p>
+            <div class="tags" style="justify-content:center;">
+              <div class="tag" data-prompt="My client is hungry and needs food assistance today">🍽️ Food</div>
+              <div class="tag" data-prompt="Client needs emergency shelter tonight">🏠 Shelter</div>
+              <div class="tag" data-prompt="Client is in recovery and needs substance use treatment">💊 Recovery</div>
+              <div class="tag" data-prompt="Client needs help with Medicaid enrollment">📋 Benefits</div>
+              <div class="tag" data-prompt="start PHQ-4">🔍 Quick Screen</div>
+              <div class="tag" data-prompt="Client needs a job and has no work history">💼 Employment</div>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div class="sidebar-card warning-card">
-        <h3>Important</h3>
-        <p>I'm not a clinician. For medical advice, diagnosis, or crisis help, contact a licensed professional or call 988 (Suicide & Crisis Lifeline).</p>
+      <div class="sources-drawer" id="sources-drawer" style="display:none;">
+        <button class="sources-toggle" onclick="toggleSources()">
+          📚 Sources & Evidence <span id="source-count"></span>
+        </button>
+        <div class="sources-content" id="sources-content" style="display:none;"></div>
       </div>
+    </div>
 
-      <div class="session-info" id="session-info">Session: 0 messages</div>
+    <!-- ── RESOURCE PANEL (column 3) ── -->
+    <aside class="resource-panel" id="resource-panel" role="complementary" aria-label="Retrieved resources">
+      <div class="resource-panel-header">
+        <span>Resources</span>
+        <span id="session-info" style="margin-left:auto;font-size:11px;font-weight:400;color:var(--muted);">0 msgs</span>
+      </div>
+      <div class="resource-tabs" id="resource-tabs" style="display:none;"></div>
+      <div class="resource-filters" id="resource-filters" style="display:none;"></div>
+      <div class="resource-cards" id="resource-cards">
+        <div class="resource-empty-state" id="resource-empty-state">
+          <p>Matched resources will appear here when a client location is provided.</p>
+        </div>
+      </div>
+      <div class="resource-panel-footer">
+        <div class="warning-card">
+          <h3>Important</h3>
+          <p>Not a clinician. For crisis help: 988 or 911.</p>
+        </div>
+      </div>
     </aside>
   </main>
 
@@ -1185,7 +1591,7 @@
 
     function updateSessionInfo() {
       const count = conversationHistory.filter(h => h.role === 'user').length;
-      sessionInfo.textContent = `Session: ${count} message${count !== 1 ? 's' : ''}`;
+      if (sessionInfo) sessionInfo.textContent = `${count} msg${count !== 1 ? 's' : ''}`;
     }
 
     // ── MARKDOWN PARSER ──
@@ -1200,13 +1606,17 @@
         // Blockquotes (> lines) — must run AFTER HTML escaping
         .replace(/^&gt;\s?(.*)$/gm, '%%BLOCKQUOTE%%$1%%/BLOCKQUOTE%%')
 
-        .replace(/^### 🎯(.*)$/gm, '<h3 class="section-header quick">🎯$1</h3><div class="section-quick">')
+        .replace(/^### 🎯(.*)$/gm, '</div><h3 class="section-header quick">🎯$1</h3><div class="section-quick">')
         .replace(/^### 💬(.*)$/gm, '</div><h3 class="section-header say">💬$1</h3><div class="section-action">')
         .replace(/^### ✅(.*)$/gm, '</div><h3 class="section-header action">✅$1</h3><div class="section-action">')
         .replace(/^### 📍(.*)$/gm, '</div><h3 class="section-header resource">📍$1</h3><div class="section-resource">')
         .replace(/^### ⚠️(.*)$/gm, '</div><h3 class="section-header warning">⚠️$1</h3><div class="section-warning">')
         .replace(/^### 📝(.*)$/gm, '</div><h3 class="section-header doc">📝$1</h3><div class="section-quick">')
         .replace(/^### 📋(.*)$/gm, '</div><h3 class="section-header checklist">📋$1</h3><div class="section-checklist">')
+        .replace(/^### 🔴(.*)$/gm, '</div><h3 class="section-header triage-today">🔴$1</h3><div class="section-triage-today">')
+        .replace(/^### 🟡(.*)$/gm, '</div><h3 class="section-header triage-week">🟡$1</h3><div class="section-triage-week">')
+        .replace(/^### 🟢(.*)$/gm, '</div><h3 class="section-header triage-long">🟢$1</h3><div class="section-triage-long">')
+        .replace(/^### 🔗(.*)$/gm, '</div><h3 class="section-header barrier-buster">🔗$1</h3><div class="section-barrier-buster">')
         .replace(/^### (.*)$/gm, '</div><h3>$1</h3><div>')
 
         .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
@@ -1245,16 +1655,564 @@
 
       html = html
         .replace(/<div><\/div>/g, '')
-        .replace(/^<\/div>/, '')
+        .replace(/^(\s|<br>|<\/p><p>)*<\/div>/, '')
         .replace(/<div>$/, '');
 
       if (html.includes('section-')) html += '</div>';
 
-      html = html.replace(/\*Disclaimer:([^*]*)\*/g, '<div class="disclaimer">⚠️ <strong>Disclaimer:</strong>$1</div>');
       html = html.replace(/<br><br>/g, '<br>');
       html = html.replace(/<p><\/p>/g, '');
 
       return html;
+    }
+
+    // ── PANEL STATE ──
+    let _resourceGroups = {};
+    let _activeResourceTab = null;
+    let _activeFilters = new Set();
+    let _lastRiskTier = null;
+    let _lastBarriers = [];
+    let _snapshotData = {}; // { zip, location, householdType, language, phone, id, riskTier }
+
+    // ── SNAPSHOT BAR (session context chips below chat) ──
+    function updateSnapshotBar(data, messageText) {
+      // Extract info from the current message + history
+      const allUserText = [messageText || '', ...conversationHistory.filter(h => h.role === 'user').map(h => h.text || '')].join(' ');
+      const lower = allUserText.toLowerCase();
+
+      // ZIP code
+      const zipMatch = allUserText.match(/\b(1[0-4]\d{3})\b/);
+      if (zipMatch) _snapshotData.zip = zipMatch[1];
+
+      // Household type
+      if (/child|kids?|son|daughter|baby|toddler|8.year|minor|dependent|family|pregnant/.test(lower)) {
+        _snapshotData.householdType = 'Family';
+      } else if (_snapshotData.zip && !_snapshotData.householdType) {
+        _snapshotData.householdType = 'Single Adult';
+      }
+
+      // Language
+      if (/spanish|español|interpreter|no english|limited english/.test(lower)) _snapshotData.language = 'Spanish';
+      else if (!_snapshotData.language && _snapshotData.zip) _snapshotData.language = 'English';
+
+      // Phone status
+      if (/no phone|phone.{0,10}(off|broken|lost|dead|disconnected)|without.{0,5}(phone|cell)/.test(lower)) _snapshotData.phone = 'No Phone';
+
+      // ID status
+      if (/no id|lost.{0,5}id|missing.{0,5}id|don'?t have.{0,10}(id|identification|document)/.test(lower)) _snapshotData.id = 'No ID';
+
+      // Risk tier
+      if (data && data.riskTier) _snapshotData.riskTier = data.riskTier;
+
+      // Render
+      const bar = document.getElementById('snapshot-bar');
+      if (!_snapshotData.zip && !_snapshotData.householdType) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = 'flex';
+      let chips = '';
+      if (_snapshotData.householdType) chips += `<span class="snapshot-chip set">${_snapshotData.householdType === 'Family' ? '👨‍👧' : '👤'} ${_snapshotData.householdType}</span>`;
+      if (_snapshotData.zip) chips += `<span class="snapshot-chip set">📍 ${_snapshotData.zip}</span>`;
+      if (_snapshotData.language) chips += `<span class="snapshot-chip set">🗣️ ${_snapshotData.language}</span>`;
+      if (_snapshotData.phone) chips += `<span class="snapshot-chip missing">📱 ${_snapshotData.phone}</span>`;
+      else if (_snapshotData.zip && !_snapshotData.phone) chips += `<span class="snapshot-chip" style="opacity:0.5">📱 ?</span>`;
+      if (_snapshotData.id) chips += `<span class="snapshot-chip missing">🪪 ${_snapshotData.id}</span>`;
+      else if (_snapshotData.zip && !_snapshotData.id) chips += `<span class="snapshot-chip" style="opacity:0.5">🪪 ?</span>`;
+      if (_snapshotData.riskTier) {
+        const colors = { GREEN: 'set', YELLOW: '', ORANGE: 'missing', RED: 'missing' };
+        chips += `<span class="snapshot-chip ${colors[_snapshotData.riskTier] || ''}">${_snapshotData.riskTier}</span>`;
+      }
+      bar.innerHTML = chips;
+    }
+
+    // ── RISK TIER BADGE ──
+    function updateRiskTierBadge(tier) {
+      const badge = document.getElementById('risk-tier-badge');
+      if (!tier || tier === 'GREEN') {
+        badge.style.display = 'none';
+        return;
+      }
+      badge.style.display = 'inline-flex';
+      badge.className = 'risk-tier-badge ' + tier.toLowerCase();
+      badge.textContent = tier;
+      _lastRiskTier = tier;
+    }
+
+    // ── BARRIER CHIPS ──
+    function renderBarrierChips(barriers) {
+      const container = document.getElementById('barrier-chips');
+      if (!barriers || barriers.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+      _lastBarriers = barriers;
+      container.innerHTML = barriers.map(b => `<span class="barrier-chip">${escapeHtml(b)}</span>`).join('');
+    }
+
+    // ── EXTRACT ACTION CARDS FROM AI RESPONSE ──
+    function extractActionCards(responseText, data) {
+      const cards = [];
+
+      // 1. Safety card (from riskTier, not parsed from text)
+      if (data.riskTier === 'ORANGE' || data.riskTier === 'RED') {
+        cards.push({ type: 'safety', tier: data.riskTier, context: data.riskContext || '' });
+      } else if (data.riskTier === 'YELLOW') {
+        cards.push({ type: 'safety', tier: 'YELLOW', context: '' });
+      }
+
+      // 2. Split response by ### headers into sections
+      const sections = responseText.split(/^### /gm).filter(Boolean);
+      for (const section of sections) {
+        const firstLine = section.split('\n')[0].trim();
+        const body = section.substring(section.indexOf('\n') + 1).trim();
+        if (!firstLine) continue;
+
+        if (/🔴/.test(firstLine)) cards.push({ type: 'triage-today', title: '### ' + firstLine, body });
+        else if (/🟡/.test(firstLine)) cards.push({ type: 'triage-week', title: '### ' + firstLine, body });
+        else if (/🟢/.test(firstLine)) cards.push({ type: 'triage-long', title: '### ' + firstLine, body });
+        else if (/🔗/.test(firstLine)) cards.push({ type: 'barrier-buster', title: '### ' + firstLine, body });
+        else if (/📍/.test(firstLine)) cards.push({ type: 'resources', title: '### ' + firstLine, body });
+        else if (/✅/.test(firstLine)) cards.push({ type: 'actions', title: '### ' + firstLine, body });
+        else if (/💬/.test(firstLine)) cards.push({ type: 'say', title: '### ' + firstLine, body });
+        else if (/🎯/.test(firstLine)) cards.push({ type: 'quick', title: '### ' + firstLine, body });
+        else if (/📋/.test(firstLine)) cards.push({ type: 'checklist', title: '### ' + firstLine, body });
+        else if (/⚠/.test(firstLine)) cards.push({ type: 'safety', title: '### ' + firstLine, body, tier: data.riskTier });
+        else cards.push({ type: 'generic', title: '### ' + firstLine, body });
+      }
+
+      // 3. Screening suggestions card
+      if (data.screeningSuggestions && data.screeningSuggestions.length > 0) {
+        cards.push({ type: 'screening-suggest', suggestions: data.screeningSuggestions });
+      }
+
+      // 4. Generate card (always at bottom)
+      cards.push({ type: 'generate' });
+
+      return cards;
+    }
+
+    // ── BUILD SAFETY CARD HTML ──
+    function buildSafetyCardHtml(card) {
+      const tier = card.tier || 'ORANGE';
+      const ctx = card.context || '';
+      let tierClass = tier.toLowerCase();
+      let html = `<div class="action-card-header safety ${tierClass}">`;
+
+      if (tier === 'RED') {
+        html += '🔴 CRISIS — Immediate Action Required</div>';
+        html += `<div class="action-card-body">
+          <ol>
+            <li><strong>If immediate danger:</strong> Call <strong>911</strong></li>
+            <li><strong>Crisis support:</strong> Call <strong>988</strong> (24/7, free, confidential)</li>
+            <li><strong>Document</strong> the safety assessment in your session note</li>
+          </ol></div>`;
+      } else if (tier === 'ORANGE') {
+        if (ctx.includes('OD risk') || ctx.includes('withdrawal') || ctx.includes('fentanyl') || ctx.includes('overdose')) {
+          html += '🟠 Overdose Risk Protocol</div>';
+          html += `<div class="action-card-body">
+            <ol>
+              <li><strong>Ask:</strong> "Are you alone right now, or is someone with you?"</li>
+              <li><strong>Ask:</strong> "Have you had an overdose before, or needed naloxone?"</li>
+              <li><strong>Medical check:</strong> Chest pain, seizures, severe shaking, fainting → <strong>911</strong></li>
+              <li><strong>Naloxone:</strong> Confirm access or connect to nearest distribution site today</li>
+            </ol></div>`;
+        } else if (ctx.includes('DV') || ctx.includes('domestic') || ctx.includes('threat')) {
+          html += '🟠 DV Safety Protocol</div>';
+          html += `<div class="action-card-body">
+            <ol>
+              <li><strong>Ask:</strong> "Are you and any dependents somewhere safe right now?"</li>
+              <li>If immediate physical danger → <strong>911</strong></li>
+              <li>Safe Horizon NYC: <strong>1-800-621-HOPE (4673)</strong> — confidential safety planning + shelter</li>
+              <li>Document the safety assessment in your session note</li>
+            </ol></div>`;
+        } else {
+          html += '🟠 Safety Mini-Protocol</div>';
+          html += `<div class="action-card-body">
+            <strong>Required questions:</strong>
+            <ol>
+              <li>"Are you and your child safe right now—can your ex reach you in the next hour?"</li>
+              <li>"Any overdose symptoms right now (very sleepy/unresponsive, trouble breathing), or medical emergency?"</li>
+              <li>"Any thoughts of harming yourself today—any plan or intention?"</li>
+            </ol>
+            <p style="margin-top:6px;font-weight:700;">If danger or medical emergency → <strong>911</strong> · Emotional crisis support → <strong>988</strong></p>
+          </div>`;
+        }
+      } else if (tier === 'YELLOW') {
+        html += '🟡 Safety Check</div>';
+        html += `<div class="action-card-body">
+          <p><strong>Confirm:</strong> "Are you having any thoughts of harming yourself today?"</p>
+          <p style="margin-top:4px;">If yes/unsure → <strong>988</strong> · If immediate danger → <strong>911</strong></p>
+        </div>`;
+      }
+      return html;
+    }
+
+    // ── RENDER ACTION CARDS IN CENTER PANEL ──
+    function renderActionCards(cards) {
+      const container = document.getElementById('action-cards');
+      const emptyState = document.getElementById('action-empty-state');
+      if (emptyState) emptyState.style.display = 'none';
+
+      // Preserve output cards (notes, emails, handoffs) before clearing
+      const preservedOutputs = Array.from(container.querySelectorAll('.action-card'))
+        .filter(card => card.querySelector('.output-content'));
+      container.innerHTML = '';
+
+      for (const card of cards) {
+        const el = document.createElement('div');
+        el.className = 'action-card';
+
+        if (card.type === 'safety' && !card.body) {
+          // Standalone safety card from risk tier
+          el.innerHTML = buildSafetyCardHtml(card);
+        } else if (card.type === 'generate') {
+          el.innerHTML = `<div class="action-card-header generic">📤 Generate Outputs</div>
+            <div class="generate-card">
+              <button class="btn" onclick="sendMessage('Generate a GIRP note based on our conversation')">📋 GIRP Note</button>
+              <button class="btn" onclick="sendMessage('Generate a BIRP note based on our conversation')">📋 BIRP Note</button>
+              <button class="btn" onclick="sendMessage('write a referral email')">📧 Referral Email</button>
+              <button class="btn" onclick="sendMessage('warm handoff script')">📞 Warm Handoff</button>
+            </div>`;
+        } else if (card.type === 'screening-suggest') {
+          let sugHtml = '<div class="action-card-header screening-suggest">🔍 Recommended Screenings</div><div class="screening-suggest-body">';
+          card.suggestions.forEach(s => {
+            sugHtml += `<button class="suggestion-btn" onclick="sendMessage('start ${escapeHtml(s.form)}')">${escapeHtml(s.form)}: ${escapeHtml(s.reason)}</button>`;
+          });
+          sugHtml += '</div>';
+          el.innerHTML = sugHtml;
+        } else {
+          // Standard section card with header + body
+          const headerClass = card.type || 'generic';
+          el.innerHTML = `<div class="action-card-header ${escapeHtml(headerClass)}">${parseMarkdown(card.title || '')}</div>
+            <div class="action-card-body">${parseMarkdown(card.body || '')}</div>`;
+        }
+        container.appendChild(el);
+      }
+
+      // Re-append preserved output cards (notes, emails, handoffs) at the bottom
+      preservedOutputs.forEach(card => container.appendChild(card));
+    }
+
+    // ── RESOURCE PANEL ──
+    function normalizeCategoryName(cat) {
+      const map = {
+        'shelter': 'Housing', 'housing': 'Housing', 'family_shelter': 'Housing', 'drop_in': 'Housing',
+        'food': 'Food', 'meals': 'Food', 'pantry': 'Food', 'snap': 'Food',
+        'sud': 'SUD', 'substance': 'SUD', 'detox': 'SUD', 'harm_reduction': 'SUD', 'naloxone': 'SUD', 'treatment': 'SUD',
+        'mental_health': 'MH', 'counseling': 'MH', 'therapy': 'MH', 'psychiatric': 'MH',
+        'dv': 'DV/Legal', 'domestic_violence': 'DV/Legal', 'legal': 'DV/Legal', 'legal_aid': 'DV/Legal',
+        'employment': 'Jobs', 'workforce': 'Jobs', 'job': 'Jobs', 'career': 'Jobs',
+        'benefits': 'Benefits', 'medicaid': 'Benefits', 'insurance': 'Benefits', 'cash_assistance': 'Benefits',
+      };
+      const key = (cat || '').toLowerCase().replace(/[\s-]+/g, '_');
+      return map[key] || cat || 'Other';
+    }
+
+    function renderResourcePanel(resources, multiNeeds) {
+      const tabsEl = document.getElementById('resource-tabs');
+      const cardsEl = document.getElementById('resource-cards');
+      const filtersEl = document.getElementById('resource-filters');
+      const emptyState = document.getElementById('resource-empty-state');
+
+      // Hard rule: no retrieval = no locations
+      if (!resources || resources.length === 0) {
+        tabsEl.style.display = 'none';
+        filtersEl.style.display = 'none';
+        if (emptyState) emptyState.style.display = 'flex';
+        cardsEl.innerHTML = '';
+        cardsEl.appendChild(emptyState || document.createElement('div'));
+        return;
+      }
+
+      if (emptyState) emptyState.style.display = 'none';
+      tabsEl.style.display = 'flex';
+      filtersEl.style.display = 'flex';
+
+      // Group resources by category
+      _resourceGroups = {};
+      for (const r of resources) {
+        const cat = normalizeCategoryName(r.category || r.type || '');
+        if (!_resourceGroups[cat]) _resourceGroups[cat] = [];
+        _resourceGroups[cat].push(r);
+      }
+
+      // Render tabs
+      const tabNames = Object.keys(_resourceGroups);
+      tabsEl.innerHTML = tabNames.map((name, i) =>
+        `<button class="resource-tab ${i === 0 ? 'active' : ''}" onclick="switchResourceTab('${escapeHtml(name)}')">${escapeHtml(name)} (${_resourceGroups[name].length})</button>`
+      ).join('');
+
+      // Render filters
+      filtersEl.innerHTML = ['Walk-in', 'Family-friendly', 'Spanish', 'No-ID OK', 'Open now'].map(f =>
+        `<button class="resource-filter" onclick="toggleResourceFilter(this, '${f}')">${f}</button>`
+      ).join('');
+
+      // Render first tab
+      _activeResourceTab = tabNames[0];
+      renderResourceCards(_resourceGroups[tabNames[0]], cardsEl);
+    }
+
+    function switchResourceTab(tabName) {
+      _activeResourceTab = tabName;
+      // Update active tab styling
+      document.querySelectorAll('.resource-tab').forEach(t => {
+        t.classList.toggle('active', t.textContent.startsWith(tabName));
+      });
+      const cardsEl = document.getElementById('resource-cards');
+      renderResourceCards(_resourceGroups[tabName] || [], cardsEl);
+    }
+
+    function toggleResourceFilter(btn, filterName) {
+      btn.classList.toggle('active');
+      if (_activeFilters.has(filterName)) _activeFilters.delete(filterName);
+      else _activeFilters.add(filterName);
+      // Re-render current tab with filters
+      if (_activeResourceTab && _resourceGroups[_activeResourceTab]) {
+        const cardsEl = document.getElementById('resource-cards');
+        renderResourceCards(_resourceGroups[_activeResourceTab], cardsEl);
+      }
+    }
+
+    function renderResourceCards(resources, container) {
+      container.innerHTML = '';
+      if (!resources || resources.length === 0) {
+        container.innerHTML = '<div class="resource-empty-state"><p>No resources in this category.</p></div>';
+        return;
+      }
+      // Apply filters (basic — mostly informational since we don't always have this metadata)
+      let filtered = resources;
+      // Note: Filters are informational for now; future enhancement could add metadata-based filtering
+
+      for (const r of filtered) {
+        const el = document.createElement('div');
+        el.className = 'resource-card';
+        let html = `<div class="resource-name">${escapeHtml(r.name || r.agency_name || 'Unknown')}</div>`;
+        if (r.program || r.program_name) html += `<div class="resource-detail">${escapeHtml(r.program || r.program_name)}</div>`;
+        if (r.address) html += `<div class="resource-detail">📍 ${escapeHtml(r.address)}</div>`;
+        if (r.phone || r.phone_number) html += `<div class="resource-detail">📞 ${escapeHtml(r.phone || r.phone_number)}</div>`;
+        if (r.hours || r.operating_hours) html += `<div class="resource-detail">🕐 ${escapeHtml(r.hours || r.operating_hours)}</div>`;
+        if (r.eligibility) html += `<div class="resource-detail">✓ ${escapeHtml(r.eligibility)}</div>`;
+        if (r._distanceMiles !== undefined) html += `<div class="resource-distance">${r._distanceMiles} mi</div>`;
+        // Source ID
+        const sourceId = r._source === 'samhsa' ? `API-${r.frid || ''}` : `LS-${r.id || r._index || ''}`;
+        html += `<div class="resource-source">Source: ${escapeHtml(sourceId)}</div>`;
+        el.innerHTML = html;
+        container.appendChild(el);
+      }
+    }
+
+    // ── SOURCES DRAWER ──
+    function renderSourcesDrawer(sources) {
+      const drawer = document.getElementById('sources-drawer');
+      const content = document.getElementById('sources-content');
+      const count = document.getElementById('source-count');
+
+      if (!sources || sources.length === 0) {
+        drawer.style.display = 'none';
+        return;
+      }
+      drawer.style.display = 'block';
+      count.textContent = `(${sources.length})`;
+
+      content.innerHTML = sources.map(s => {
+        const sourceId = s.id || s.source || 'VTX';
+        const snippet = (s.content || s.snippet || '').substring(0, 200);
+        return `<div class="source-item">
+          <div class="source-name">${escapeHtml(sourceId)}</div>
+          <div class="source-snippet">${escapeHtml(snippet)}${snippet.length >= 200 ? '...' : ''}</div>
+        </div>`;
+      }).join('');
+    }
+
+    function toggleSources() {
+      const content = document.getElementById('sources-content');
+      content.style.display = content.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // ── CLEAR PANELS (used on session clear) ──
+    function clearPanels() {
+      // Action panel
+      const actionCards = document.getElementById('action-cards');
+      const actionEmpty = document.getElementById('action-empty-state');
+      if (actionEmpty) actionEmpty.style.display = 'flex';
+      actionCards.innerHTML = '';
+      actionCards.appendChild(actionEmpty || document.createElement('div'));
+      // Restore empty state with tags
+      if (actionEmpty) {
+        actionEmpty.innerHTML = `<div>
+          <p style="margin-bottom:8px;">Action cards appear here as you discuss your client's situation.</p>
+          <div class="tags" style="justify-content:center;">
+            <div class="tag" data-prompt="My client is hungry and needs food assistance today">🍽️ Food</div>
+            <div class="tag" data-prompt="Client needs emergency shelter tonight">🏠 Shelter</div>
+            <div class="tag" data-prompt="Client is in recovery and needs substance use treatment">💊 Recovery</div>
+            <div class="tag" data-prompt="Client needs help with Medicaid enrollment">📋 Benefits</div>
+            <div class="tag" data-prompt="start PHQ-4">🔍 Quick Screen</div>
+            <div class="tag" data-prompt="Client needs a job and has no work history">💼 Employment</div>
+          </div>
+        </div>`;
+        // Re-bind tag click handlers
+        actionEmpty.querySelectorAll('.tag').forEach(tag => {
+          tag.addEventListener('click', () => {
+            const prompt = tag.getAttribute('data-prompt');
+            userInput.value = prompt;
+            userInput.focus();
+            sendMessage(prompt);
+          });
+        });
+      }
+
+      // Risk badge + barriers
+      updateRiskTierBadge(null);
+      renderBarrierChips([]);
+
+      // Resource panel
+      document.getElementById('resource-tabs').style.display = 'none';
+      document.getElementById('resource-filters').style.display = 'none';
+      const resCards = document.getElementById('resource-cards');
+      const resEmpty = document.getElementById('resource-empty-state');
+      resCards.innerHTML = '';
+      if (resEmpty) { resEmpty.style.display = 'flex'; resCards.appendChild(resEmpty); }
+
+      // Sources drawer
+      document.getElementById('sources-drawer').style.display = 'none';
+
+      // Snapshot bar
+      document.getElementById('snapshot-bar').style.display = 'none';
+      _snapshotData = {};
+      _resourceGroups = {};
+      _activeResourceTab = null;
+      _activeFilters.clear();
+      _lastRiskTier = null;
+      _lastBarriers = [];
+    }
+
+    // ── RENDER NOTE/EMAIL/HANDOFF IN ACTION PANEL ──
+    function renderOutputInActionPanel(type, content, format) {
+      const container = document.getElementById('action-cards');
+      const emptyState = document.getElementById('action-empty-state');
+      if (emptyState) emptyState.style.display = 'none';
+
+      // Don't clear existing cards — prepend the output card at top
+      const el = document.createElement('div');
+      el.className = 'action-card';
+
+      const labels = {
+        'note': `📋 ${format || 'Clinical'} Note`,
+        'referral_email': '📧 Referral Email Draft',
+        'warm_handoff': '📞 Warm Handoff Script'
+      };
+      const label = labels[type] || '📄 Generated Output';
+
+      el.innerHTML = `<div class="action-card-header generic" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>${label}</span>
+        <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="copyActionCardContent(this)">Copy</button>
+      </div>
+      <div class="action-card-body output-content" style="white-space:pre-wrap;max-height:300px;overflow-y:auto;font-size:11px;">${escapeHtml(content)}</div>`;
+
+      container.insertBefore(el, container.firstChild);
+    }
+
+    function copyActionCardContent(btn) {
+      const body = btn.closest('.action-card').querySelector('.output-content');
+      navigator.clipboard.writeText(body.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+      });
+    }
+
+    // ── RENDER SCREENING IN ACTION PANEL ──
+    function renderScreeningInActionPanel(data, responseText) {
+      const container = document.getElementById('action-cards');
+      const emptyState = document.getElementById('action-empty-state');
+      if (emptyState) emptyState.style.display = 'none';
+
+      const prog = data.screeningProgress || {};
+      const pct = prog.progress != null ? Math.round(prog.progress * 100) : 0;
+
+      const el = document.createElement('div');
+      el.className = 'action-card';
+      el.id = 'screening-active-card';
+
+      let html = `<div class="action-card-header screening-suggest" style="display:flex;justify-content:space-between;">
+        <span>${escapeHtml(prog.formName || 'Screening')} — Q${prog.questionNumber || '?'}/${prog.totalQuestions || '?'}</span>
+        <button onclick="cancelScreening()" style="background:none;border:1px solid #94a3b8;color:#64748b;padding:1px 8px;border-radius:4px;cursor:pointer;font-size:10px;">Cancel</button>
+      </div>`;
+      html += `<div class="action-card-body">
+        <div class="progress-bar" style="height:4px;background:#e2e8f0;border-radius:2px;margin-bottom:8px;">
+          <div class="progress-fill" style="height:100%;background:var(--accent);border-radius:2px;width:${pct}%;transition:width 0.3s;"></div>
+        </div>
+        ${parseMarkdown(responseText)}`;
+
+      // Quick-response buttons
+      const optionMatches = responseText.match(/\*\*(\d+)\*\* — (.+)/g);
+      if (optionMatches) {
+        html += '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">';
+        optionMatches.forEach(match => {
+          const parts = match.match(/\*\*(\d+)\*\* — (.+)/);
+          if (parts) {
+            html += `<button class="suggestion-btn" style="text-align:left;padding:5px 8px;font-size:11px;background:var(--accent-light);border:1px solid #bfdbfe;border-radius:6px;color:var(--accent);cursor:pointer;font-weight:600;" onclick="sendScreeningResponse('${parts[1]}')">${parts[1]} — ${escapeHtml(parts[2])}</button>`;
+          }
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+      el.innerHTML = html;
+
+      // Replace existing screening card or prepend
+      const existing = document.getElementById('screening-active-card');
+      if (existing) existing.replaceWith(el);
+      else container.insertBefore(el, container.firstChild);
+    }
+
+    // ── RENDER SCREENING COMPLETE IN ACTION PANEL ──
+    function renderScreeningCompleteInActionPanel(data, responseText) {
+      const container = document.getElementById('action-cards');
+      const result = data.screeningResult || {};
+
+      // Remove active screening card
+      const existing = document.getElementById('screening-active-card');
+      if (existing) existing.remove();
+
+      let sevClass = 'severity-minimal';
+      const sevLower = (result.severity || '').toLowerCase();
+      if (/severe|high|probable|positive|dependence|harmful/.test(sevLower)) sevClass = 'severity-severe';
+      else if (/moderate|borderline|hazardous/.test(sevLower)) sevClass = 'severity-moderate';
+      else if (/mild/.test(sevLower)) sevClass = 'severity-mild';
+
+      const el = document.createElement('div');
+      el.className = 'action-card';
+
+      let html = `<div class="action-card-header screening-suggest" style="display:flex;justify-content:space-between;">
+        <span>${escapeHtml(result.formName || 'Screening')} — Complete</span>
+        <div>
+          <button class="btn" style="font-size:10px;padding:3px 8px;margin-right:4px;" onclick="downloadScreeningPDF()">PDF</button>
+          <button class="btn" style="font-size:10px;padding:3px 8px;" onclick="copyActionCardContent(this)">Copy</button>
+        </div>
+      </div>`;
+      html += `<div class="action-card-body output-content">`;
+      html += `<div style="display:flex;gap:12px;align-items:flex-start;">`;
+      // Score box
+      html += `<div style="text-align:center;min-width:70px;">
+        <div style="font-size:28px;font-weight:800;color:var(--text);">${result.score}</div>
+        <div style="font-size:10px;color:var(--muted);">out of ${result.maxScore}</div>
+        <div class="severity-label ${sevClass}" style="margin-top:4px;padding:2px 8px;border-radius:6px;font-size:10px;font-weight:700;">${escapeHtml(result.severity || 'N/A')}</div>
+      </div>`;
+      // Recommendation
+      html += `<div style="flex:1;font-size:11px;">`;
+      if (result.recommendation) html += `<p style="margin-bottom:4px;">${escapeHtml(result.recommendation)}</p>`;
+      if (result.zone) html += `<p style="color:var(--muted);font-size:10px;">Risk Zone: ${escapeHtml(result.zone)}</p>`;
+      html += `</div></div>`;
+
+      // Safety flag
+      if (result.suicidalIdeation || result.selfHarmFlag || result.acute) {
+        html += `<div style="margin-top:8px;padding:6px 8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:11px;font-weight:700;color:#991b1b;">⚠ SAFETY FLAG — Immediate Review Required</div>`;
+      }
+      html += '</div>';
+      el.innerHTML = html;
+      container.insertBefore(el, container.firstChild);
+
+      window._lastScreeningResult = result;
     }
 
     // ── SEND MESSAGE ──
@@ -1283,15 +2241,20 @@
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
       try {
+        const _fetchController = new AbortController();
+        const _fetchTimeout = setTimeout(() => _fetchController.abort(), 28000); // 28s client timeout (slightly above 26s server limit)
+
         const response = await fetch('/.netlify/functions/ai-peer-assist-chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             message: text,
-            history: conversationHistory.slice(0, -1),
+            history: conversationHistory.slice(-21, -1), // Last 20 turns (matches backend cap)
             screeningState: activeScreeningState
-          })
+          }),
+          signal: _fetchController.signal
         });
+        clearTimeout(_fetchTimeout);
 
         if (!response.ok) throw new Error(`Server error: ${response.statusText}`);
 
@@ -1313,8 +2276,14 @@
           activeScreeningState = null;
         }
 
+        // Always update snapshot bar on every response
+        updateSnapshotBar(data, text);
+
         if (isCrisis) {
-          // Render as CRISIS alert
+          // Crisis: render in BOTH chat (full) and action panel (safety card)
+          updateRiskTierBadge('RED');
+          renderActionCards([{ type: 'safety', tier: 'RED', context: '' }, { type: 'generate' }]);
+          if (data.barriers) renderBarrierChips(data.barriers);
           loadingMsg.innerHTML = `
             <div class="message-content crisis-output">
               <div class="crisis-header">
@@ -1325,192 +2294,163 @@
           announceToScreenReader('Crisis detected. Immediate action required. Crisis resources are displayed.');
 
         } else if (isNote) {
-          // Render as clinical note
+          // Render note in action panel + compact chat reference
           const noteFormat = data.noteFormat || 'BIRP';
-          loadingMsg.innerHTML = `
-            <div class="message-content note-output">
-              <div class="note-header">
-                <span>📋 ${noteFormat} Clinical Note</span>
-                <button class="copy-btn" onclick="copyNote(this)">Copy</button>
-              </div>
-              <div class="note-body">${escapeHtml(responseText)}</div>
-            </div>`;
+          renderOutputInActionPanel('note', responseText, noteFormat);
+          loadingMsg.innerHTML = `<div class="message-content">
+            <strong>📋 ${noteFormat} Note generated.</strong>
+            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See note in Action Panel →</div>
+          </div>`;
 
         } else if (data.mode === 'referral_email') {
-          // Render as referral email preview
-          loadingMsg.innerHTML = `
-            <div class="message-content referral-email-output">
-              <div class="referral-email-header">
-                <span>📧 Referral Email Draft</span>
-                <button class="copy-btn" onclick="copyNote(this)">Copy Email</button>
-              </div>
-              <div class="referral-email-body">${parseMarkdown(responseText)}</div>
-            </div>`;
+          // Render referral email in action panel + compact chat reference
+          renderOutputInActionPanel('referral_email', responseText);
+          loadingMsg.innerHTML = `<div class="message-content">
+            <strong>📧 Referral email drafted.</strong>
+            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See email in Action Panel →</div>
+          </div>`;
 
         } else if (data.mode === 'warm_handoff') {
-          // Render as warm handoff phone script
-          loadingMsg.innerHTML = `
-            <div class="message-content warm-handoff-output">
-              <div class="warm-handoff-header">
-                <span>📞 Warm Handoff Phone Script</span>
-                <button class="copy-btn" onclick="copyNote(this)">Copy Script</button>
-              </div>
-              <div class="warm-handoff-body">${parseMarkdown(responseText)}</div>
-            </div>`;
+          // Render warm handoff in action panel + compact chat reference
+          renderOutputInActionPanel('warm_handoff', responseText);
+          loadingMsg.innerHTML = `<div class="message-content">
+            <strong>📞 Warm handoff script ready.</strong>
+            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See script in Action Panel →</div>
+          </div>`;
 
         } else if (isScreening) {
-          // Render screening question with progress bar and quick-response buttons
+          // Render screening in action panel + compact chat note
           const prog = data.screeningProgress || {};
-          const pct = prog.progress != null ? Math.round(prog.progress * 100) : 0;
-          let screeningHtml = `<div class="message-content screening-output">`;
-          screeningHtml += `<div class="screening-progress">
-            <div style="display:flex;justify-content:space-between;align-items:center;">
-              <span>${prog.formName || 'Screening'} — Question ${prog.questionNumber || '?'} of ${prog.totalQuestions || '?'}</span>
-              <button onclick="cancelScreening()" style="background:none;border:1px solid #94a3b8;color:#64748b;padding:2px 10px;border-radius:6px;cursor:pointer;font-size:0.8rem;">Cancel</button>
-            </div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+          renderScreeningInActionPanel(data, responseText);
+          loadingMsg.innerHTML = `<div class="message-content">
+            <em>${escapeHtml(prog.formName || 'Screening')} — Question ${prog.questionNumber || '?'} of ${prog.totalQuestions || '?'}. See action panel.</em>
           </div>`;
-          screeningHtml += `<div>${parseMarkdown(responseText)}</div>`;
-
-          // Build quick-response buttons from the response text
-          const optionMatches = responseText.match(/\*\*(\d+)\*\* — (.+)/g);
-          if (optionMatches && optionMatches.length > 0) {
-            screeningHtml += `<div class="screening-options">`;
-            optionMatches.forEach(match => {
-              const parts = match.match(/\*\*(\d+)\*\* — (.+)/);
-              if (parts) {
-                screeningHtml += `<button class="screening-option-btn" onclick="sendScreeningResponse('${parts[1]}')">${parts[1]} — ${escapeHtml(parts[2])}</button>`;
-              }
-            });
-            screeningHtml += `</div>`;
-          }
-
-          screeningHtml += `</div>`;
-          loadingMsg.innerHTML = screeningHtml;
           announceToScreenReader(`Screening question ${prog.questionNumber} of ${prog.totalQuestions}`);
 
         } else if (isScreeningComplete) {
-          // Render screening result with structured two-panel layout
+          // Render screening complete in action panel + compact chat note
           const result = data.screeningResult || {};
-          window._lastScreeningResult = result;
-
-          // Determine severity CSS class
-          let sevClass = 'severity-minimal';
-          const sevLower = (result.severity || '').toLowerCase();
-          if (/severe|high|probable|positive|dependence|harmful/.test(sevLower)) sevClass = 'severity-severe';
-          else if (/moderate|borderline|hazardous/.test(sevLower)) sevClass = 'severity-moderate';
-          else if (/mild/.test(sevLower)) sevClass = 'severity-mild';
-
-          let completeHtml = `<div class="message-content screening-complete-output">`;
-          completeHtml += `<div class="screening-complete-header">
-            <span>${escapeHtml(result.formName || 'Screening')} — Complete</span>
-            <div>
-              <button class="copy-btn" onclick="downloadScreeningPDF()" style="margin-right:6px;">Download PDF</button>
-              <button class="copy-btn" onclick="copyNote(this)">Copy Results</button>
-            </div>
+          renderScreeningCompleteInActionPanel(data, responseText);
+          const safetyFlag = (result.suicidalIdeation || result.selfHarmFlag || result.acute) ? ' ⚠ SAFETY FLAG' : '';
+          loadingMsg.innerHTML = `<div class="message-content">
+            <strong>${escapeHtml(result.formName || 'Screening')} complete — Score: ${result.score}/${result.maxScore} (${escapeHtml(result.severity || 'N/A')}).${safetyFlag}</strong>
+            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See full results in Action Panel →</div>
           </div>`;
-
-          // Two-panel grid layout
-          completeHtml += `<div class="screening-result-layout">`;
-
-          // Left panel: Score summary card
-          completeHtml += `<div class="screening-summary-panel">`;
-          completeHtml += `<div class="score-box"><div class="score-value">${result.score}</div><div class="score-max">out of ${result.maxScore}</div></div>`;
-          completeHtml += `<div class="severity-label ${sevClass}">${escapeHtml(result.severity || 'N/A')}</div>`;
-          if (result.zone) {
-            completeHtml += `<div style="text-align:center;font-size:11px;color:#6b7280;margin-bottom:6px;">Risk Zone: ${escapeHtml(result.zone)}</div>`;
-          }
-          if (result.clusters) {
-            completeHtml += `<div style="font-size:11px;color:#374151;margin-bottom:6px;">
-              <div style="font-weight:700;margin-bottom:3px;">PTSD Clusters:</div>
-              <div>B Intrusion: ${result.clusters.intrusion ?? '—'}</div>
-              <div>C Avoidance: ${result.clusters.avoidance ?? '—'}</div>
-              <div>D Neg. Cognition: ${result.clusters.negativeCognition ?? '—'}</div>
-              <div>E Arousal: ${result.clusters.arousal ?? '—'}</div>
-            </div>`;
-            if (result.provisionalDiagnosis !== undefined) {
-              const dxStyle = result.provisionalDiagnosis ? 'color:#991b1b;font-weight:700' : 'color:#166534';
-              completeHtml += `<div style="font-size:11px;${dxStyle};margin-bottom:6px;">Provisional Dx: ${result.provisionalDiagnosis ? 'YES' : 'No'}</div>`;
-            }
-          }
-          if (result.injectionRisk) {
-            completeHtml += `<div style="font-size:11px;color:#991b1b;font-weight:700;margin-bottom:6px;">⚠ Injection Drug Use Reported</div>`;
-          }
-          if (result.recommendation) {
-            completeHtml += `<div class="recommendation-text">${escapeHtml(result.recommendation)}</div>`;
-          }
-          completeHtml += `</div>`;
-
-          // Right panel: Response summary (scrollable)
-          completeHtml += `<div class="screening-responses-panel">`;
-          completeHtml += `<div class="responses-title">Response Summary</div>`;
-          if (result.questions && result.responses) {
-            result.questions.forEach((q, i) => {
-              const label = result.responseLabels ? result.responseLabels[i] : '';
-              const score = result.responses[i] != null ? result.responses[i] : '?';
-              completeHtml += `<div class="response-item">`;
-              completeHtml += `<div class="q-text">${i + 1}. ${escapeHtml(q)}</div>`;
-              completeHtml += `<div class="a-text">${escapeHtml(label || 'Score: ' + score)} (${score})</div>`;
-              completeHtml += `</div>`;
-            });
-          } else {
-            // Fallback to markdown if structured data not available
-            completeHtml += `<div class="screening-result-body">${parseMarkdown(responseText)}</div>`;
-          }
-          completeHtml += `</div>`;
-
-          completeHtml += `</div>`; // end screening-result-layout
-
-          // Safety alert (full-width below both panels)
-          if (result.suicidalIdeation || result.selfHarmFlag || result.acute) {
-            completeHtml += `<div class="screening-safety-alert">⚠ SAFETY FLAG — Immediate Review Required. Conduct safety assessment immediately. Consider referral to mental health professional and medication evaluation.</div>`;
-          }
-
-          completeHtml += `</div>`;
-          loadingMsg.innerHTML = completeHtml;
           announceToScreenReader(`Screening complete. Score: ${result.score} out of ${result.maxScore}. Severity: ${result.severity}`);
 
         } else {
-          // Render as guidance
-          const formattedResponse = parseMarkdown(responseText);
+          // ── GUIDANCE MODE: Dual rendering — compact chat + full action cards ──
 
-          // Needs map chips (SDoH domain tracking)
+          // Extract action cards from the structured response
+          const cards = extractActionCards(responseText, data);
+          renderActionCards(cards);
+
+          // Update risk tier badge
+          updateRiskTierBadge(data.riskTier);
+
+          // Update barrier chips
+          if (data.barriers && data.barriers.length > 0) {
+            renderBarrierChips(data.barriers);
+          }
+
+          // Update resource panel with structured resources — or clear stale data
+          if (data.resources && data.resources.length > 0) {
+            renderResourcePanel(data.resources, data.multiNeeds);
+          } else {
+            // Clear stale resources from previous response
+            const _resTabs = document.getElementById('resource-tabs');
+            const _resCards = document.getElementById('resource-cards');
+            const _resFilters = document.getElementById('resource-filters');
+            const _resEmpty = document.getElementById('resource-empty-state');
+            if (_resTabs) _resTabs.style.display = 'none';
+            if (_resFilters) _resFilters.style.display = 'none';
+            if (_resCards) _resCards.innerHTML = '';
+            if (_resEmpty) { _resEmpty.style.display = 'flex'; _resCards.appendChild(_resEmpty); }
+          }
+
+          // Update sources drawer — or hide if none returned
+          if (data.sources && data.sources.length > 0) {
+            renderSourcesDrawer(data.sources);
+          } else {
+            const _srcDrawer = document.getElementById('sources-drawer');
+            if (_srcDrawer) _srcDrawer.style.display = 'none';
+          }
+
+          // Update snapshot bar
+          updateSnapshotBar(data, text);
+
+          // ── Chat gets compact version ──
+          // Find first empathy/intro line (not a ### header)
+          const lines = responseText.split('\n');
+          const firstLine = lines.find(l => l.trim() && !l.startsWith('###') && !l.startsWith('---')) || '';
+
+          // Safety banner for chat (compact version)
+          let chatSafetyHtml = '';
+          if (data.riskTier === 'YELLOW') {
+            chatSafetyHtml = `<div class="safety-check-banner yellow" style="margin-bottom:8px;">
+              <strong>🟡 Safety check:</strong> "Are you having any thoughts of harming yourself today?"
+              <span class="safety-actions"> If yes → <strong>988</strong> · Danger → <strong>911</strong></span>
+            </div>`;
+          } else if (data.riskTier === 'ORANGE') {
+            chatSafetyHtml = `<div class="safety-check-banner yellow" style="margin-bottom:8px;background:#fed7aa;border-color:#fb923c;">
+              <strong>🟠 Safety protocol active</strong> — See required questions in Action Panel
+            </div>`;
+          }
+
+          // Needs map chips in chat
           let needsMapHtml = '';
           if (data.needsMap && Object.keys(data.needsMap).length >= 2) {
-            needsMapHtml = '<div class="needs-map"><div class="needs-map-header">🗺️ Client Needs Map</div><div class="needs-map-chips">';
+            needsMapHtml = '<div class="needs-map" style="margin-top:8px;"><div class="needs-map-header">🗺️ Client Needs Map</div><div class="needs-map-chips">';
             for (const [key, domain] of Object.entries(data.needsMap)) {
               const chipClass = domain.addressed ? 'chip-addressed' : 'chip-identified';
               const statusIcon = domain.addressed ? '✅' : '🟡';
-              const statusLabel = domain.addressed ? 'Addressed' : 'Identified';
-              needsMapHtml += `<span class="needs-chip ${chipClass}" title="${statusLabel}: ${domain.label}">${domain.icon} ${domain.label} ${statusIcon}</span>`;
+              needsMapHtml += `<span class="needs-chip ${chipClass}">${domain.icon} ${domain.label} ${statusIcon}</span>`;
             }
             needsMapHtml += '</div></div>';
           }
 
-          // Screening suggestion card (separate from response, rendered below)
-          let suggestionHtml = '';
-          if (data.screeningSuggestions && data.screeningSuggestions.length > 0) {
-            suggestionHtml = '<div class="screening-suggestion-card">';
-            suggestionHtml += '<div class="suggestion-header">🔍 Screening Suggestion</div>';
-            suggestionHtml += '<p>Based on this conversation, you might consider administering:</p>';
-            data.screeningSuggestions.forEach(s => {
-              suggestionHtml += `<button class="suggestion-btn" onclick="sendMessage('start ${escapeHtml(s.form)}')">${escapeHtml(s.form)}: ${escapeHtml(s.reason)}</button>`;
-            });
-            suggestionHtml += '</div>';
-          }
+          // Count action cards (exclude generate card)
+          const actionCardCount = cards.filter(c => c.type !== 'generate').length;
 
-          loadingMsg.innerHTML = `<div class="message-content">${formattedResponse}${needsMapHtml}${suggestionHtml}</div>`;
+          loadingMsg.innerHTML = `<div class="message-content">
+            ${chatSafetyHtml}
+            <p>${parseMarkdown(firstLine)}</p>
+            ${needsMapHtml}
+            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">
+              📋 ${actionCardCount} action card${actionCardCount !== 1 ? 's' : ''} ready →
+            </div>
+          </div>`;
         }
       } catch (error) {
         console.error('Error:', error);
         loadingMsg.className = 'message system';
-        loadingMsg.innerHTML = `<div class="message-content">Connection error: ${escapeHtml(error.message)}. Please try again.</div>`;
-        // Remove the failed assistant entry if we added one
-        if (conversationHistory[conversationHistory.length - 1]?.role === 'model') {
+
+        // Detect timeout vs. other errors
+        const isTimeout = error.name === 'AbortError' ||
+                          (error.message && (error.message.includes('504') ||
+                           error.message.includes('timeout') ||
+                           error.message.includes('Gateway')));
+
+        if (isTimeout) {
+          loadingMsg.innerHTML = `<div class="message-content">
+            <strong>The request took too long to process.</strong> This can happen with complex multi-need queries.
+            <div style="margin-top:8px;">
+              <button class="btn" style="font-size:11px;padding:4px 12px;" onclick="sendMessage(this.dataset.retry)" data-retry="${escapeHtml(text)}">Retry</button>
+              <span style="font-size:11px;color:var(--muted);margin-left:8px;">Tip: Try asking about fewer needs at once</span>
+            </div>
+          </div>`;
+        } else {
+          loadingMsg.innerHTML = `<div class="message-content">Connection error: ${escapeHtml(error.message)}. Please try again.</div>`;
+        }
+
+        // Remove the orphaned user message (pushed at start, no matching model response on error)
+        if (conversationHistory[conversationHistory.length - 1]?.role === 'user') {
           conversationHistory.pop();
         }
-        // Reset screening state on error to avoid stuck state
-        if (activeScreeningState) {
+        saveSession();
+
+        // Preserve screening state on timeout (transient) — only reset on other errors
+        if (!isTimeout && activeScreeningState) {
           activeScreeningState = null;
           userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
         }
@@ -1595,10 +2535,16 @@
     }
 
     function copyNote(btn) {
-      const noteBody = btn.closest('.note-output').querySelector('.note-body');
+      // Find the closest content container (works for notes, emails, handoffs, action cards)
+      const noteBody = btn.closest('.note-output')?.querySelector('.note-body')
+        || btn.closest('.referral-email-output')?.querySelector('.referral-email-body')
+        || btn.closest('.warm-handoff-output')?.querySelector('.warm-handoff-body')
+        || btn.closest('.action-card')?.querySelector('.output-content');
+      if (!noteBody) return;
       navigator.clipboard.writeText(noteBody.textContent).then(() => {
+        const orig = btn.textContent;
         btn.textContent = 'Copied!';
-        setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        setTimeout(() => { btn.textContent = orig; }, 2000);
       });
     }
 
@@ -1670,6 +2616,7 @@
       conversationHistory = [];
       activeScreeningState = null;
       clearSavedSession();
+      clearPanels();
       updateSessionInfo();
       userInput.placeholder = 'Ask about resources, screenings, peer guidance...';
       messagesDiv.innerHTML = `

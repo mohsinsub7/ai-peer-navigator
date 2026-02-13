@@ -8,15 +8,17 @@ const PROJECT_ID = "gen-lang-client-0731412858";
 const LOCATION = "global";
 const ENGINE_ID = "ai-peer-assist-multi-ds"; // Multi-data-store engine (PDFs + structured agency data)
 
-// ── GEMINI GENERATION CONFIG ──
-// Low temperature + narrow sampling for HIGH-FIDELITY mode:
-// Clinical peer navigation requires deterministic, data-faithful responses.
-// Addresses, phone numbers, and screening scores must be exact — no creativity.
+// ── GEMINI GENERATION CONFIG (Gemini 3 Flash) ──
+// Gemini 3 requires temperature 1.0 — lower values cause looping/degradation.
+// Determinism is achieved via system prompt, Vertex AI Search grounding,
+// and thinkingLevel LOW for fast, direct clinical responses.
 const GENERATION_CONFIG = {
-  temperature: 0.0,
-  topK: 1,
-  topP: 0.1,
+  temperature: 1.0,
+  topP: 0.95,
   maxOutputTokens: 8192,
+  thinkingConfig: {
+    thinkingLevel: "LOW",
+  },
 };
 
 const SAFETY_SETTINGS = [
@@ -26,64 +28,158 @@ const SAFETY_SETTINGS = [
   { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" }, // Lower threshold — clinical content can trigger false positives
 ];
 
-// ── CRISIS DETECTION ──
-const CRISIS_PATTERNS = [
+// ── GLOBAL DEADLINE ──
+// Netlify hard-kills at 26s. We set our own deadline at 24.5s to maximize
+// Gemini generation time while still guaranteeing a graceful response.
+const HANDLER_DEADLINE_MS = 24500;
+
+function createDeadline() {
+  const start = Date.now();
+  return {
+    start,
+    remainingMs() { return Math.max(0, HANDLER_DEADLINE_MS - (Date.now() - start)); },
+    isExpired() { return (Date.now() - start) >= HANDLER_DEADLINE_MS; }
+  };
+}
+
+// ── 4-TIER RISK CLASSIFICATION (aligned with NYC 988 vs 911 guidance) ──
+// RED = active plan/intent/means/immediate danger → hardcoded crisis protocol
+// ORANGE = ambiguous SI/HI, recent attempt, unclear safety → Gemini + safety mini-protocol
+// YELLOW = passive distress but denies plan/intent → Gemini + compact safety check
+// GREEN = no safety cues → normal workflow
+
+const RED_PATTERNS = [
   /\b(suicid|kill (my|him|her|them)self|want(s)? to die|end (my|their|his|her) life)\b/i,
   /\b(self[- ]?harm|cutting|self[- ]?injur|hurting (my|him|her|them)self)\b/i,
   /\b(overdos|od[''']?d|took too (many|much)|od on|found (him|her|them) unresponsive)\b/i,
-  /\b(domestic violence|ipv|intimate partner|abus(e|ing|ive) (partner|spouse|husband|wife|boyfriend|girlfriend))\b/i,
-  /\b(weapon|gun|knife|firearm|threat(en|ening)? (to kill|with|harm))\b/i,
+  /\b(weapon|gun|knife|firearm)\b/i,
   /\b(homicid|kill (someone|him|her|them|a person))\b/i,
-  /\b(not safe|unsafe at home|afraid.*(partner|husband|wife|boyfriend|girlfriend))\b/i,
+  /\b(threat(en|ening)? (to kill|with a|with weapon))\b/i,
+  /\b(chok(e|ed|ing)|strangl|beat(en|ing) (me|her|him|them|up))\b/i,
 ];
 
-const CRISIS_RESPONSE = `
-### 🚨 CRISIS DETECTED — IMMEDIATE ACTION REQUIRED
+const ORANGE_PATTERNS = [
+  /\b(sometimes think about not being here|what'?s the point of living|better off without me|don'?t want to be here anymore)\b/i,
+  /\b(recent attempt|tried to (kill|hurt|harm) (my|him|her|them)self (last|recently|before))\b/i,
+  /\b(thought(s)? of (not waking up|disappearing|ending it))\b/i,
+  /\b(wish I (was|were) dead|wish I didn'?t exist|wish I wouldn'?t wake up|don'?t want to wake up)\b/i,
+  /\b(positive (asq|phq.?9.?q9|suicide screen))\b/i,
+  /\b(plan to (hurt|harm|kill))\b/i,
+  /\b(domestic violence|ipv|intimate partner|abus(e|ing|ive) (partner|spouse|husband|wife|boyfriend|girlfriend))\b/i,
+  /\b(not safe|unsafe at home|afraid.*(partner|husband|wife|boyfriend|girlfriend))\b/i,
+  /\b(partner|spouse|husband|wife|boyfriend|girlfriend).*(threaten|hitting|hurt|stalk)\b/i,
+  /\b(can'?t go home|afraid to go home|scared to go home)\b/i,
+  // Overdose-adjacent risk: peer/family OD + active substance use + fentanyl contamination concern
+  /\b(friend|family|someone|people|person|roommate|partner).{0,30}(overdosed?|od[''']?d|died.{0,15}(overdose|od|drugs|fentanyl))\b/i,
+  /\b(scared|worried|afraid|concerned|terrified).{0,20}(fentanyl|overdose|contaminated|tainted|laced|poisoned)\b/i,
+  // Withdrawal / medical distress with substance use context
+  /\b(feeling sick|withdrawal|dopesick|dope sick|withdrawing|coming down|sick.{0,10}(without|when I don'?t|if I don'?t))\b/i,
+];
 
-**This situation requires immediate professional intervention. As a Peer Navigator, your priority is safety.**
+const YELLOW_PATTERNS = [
+  /\b(hopeless|no hope|lost hope|losing hope|can'?t go on)\b/i,
+  /\b(overwhelmed|can'?t (cope|take it|handle|deal))\b/i,
+  /\b(don'?t see the point|what'?s the point|tired of (living|trying|fighting))\b/i,
+  /\b(give up|giving up|ready to give up)\b/i,
+  /\b(feeling (trapped|stuck|worthless|empty|numb))\b/i,
+  /\b(no reason to (live|keep going|continue))\b/i,
+  /\b(dark (place|thoughts|times))\b/i,
+  // Mild distress / anxiety in substance use context
+  /\b(scared|anxious|panicking|can'?t sleep).{0,30}(using|drugs|pills|substances|fentanyl|overdose)\b/i,
+];
 
----
+const DENIAL_PATTERNS = [
+  /\b(denies|denied|no (plan|intent|intention|thoughts? of))\b/i,
+  /\b(not (suicidal|thinking about|planning|wanting to) (harm|hurt|kill|die))\b/i,
+  /\b(doesn'?t want to (hurt|harm|die|kill))\b/i,
+  /\b(no (suicidal|homicidal) (ideation|thoughts|intent))\b/i,
+  /\b(states? (they are|he is|she is) safe)\b/i,
+  /\b(not at risk|not in danger|safe (right now|today|currently))\b/i,
+];
+
+const CRISIS_RESPONSE = `**This situation requires immediate professional intervention. Your priority is safety.**
 
 ### ✅ ACTION STEPS (Do These NOW)
 
 1. **Stay calm and present** — do not leave the client alone if they are in immediate danger
 2. **Assess immediate safety** — "Are you safe right now?" / "Is anyone in danger right now?"
-3. **Call the appropriate crisis line:**
-
----
+3. **Call the appropriate crisis line** based on the situation (see below)
 
 ### 📍 CRISIS RESOURCES
 
-• **988 Suicide & Crisis Lifeline**: Call or text **988** (24/7, free, confidential)
-• **911**: For immediate life-threatening emergencies
+• **988 Suicide & Crisis Lifeline**: Call or text **988** (24/7, free, confidential) — for suicidal thoughts, emotional distress, behavioral health crisis
+• **911**: For immediate life-threatening or medical emergencies
 • **NYC Safe Horizon Hotline**: **1-800-621-HOPE (4673)** — domestic violence, abuse, human trafficking
 • **NYC Well**: **1-888-NYC-WELL (692-9355)** — free mental health support, 24/7, 200+ languages
-• **National Domestic Violence Hotline**: **1-800-799-7233** (24/7)
 • **Crisis Text Line**: Text **HELLO** to **741741**
 • **SAMHSA National Helpline**: **1-800-662-4357** — substance use & mental health referrals (24/7)
 • **Poison Control (overdose)**: **1-800-222-1222**
 
 ---
 
-### ⚠️ BOUNDARIES REMINDER
-• You are NOT a clinician — do not attempt to provide therapy or medical intervention
-• Your role: **ensure safety, connect to professionals, stay present, document**
-• If client is in immediate physical danger, call **911** first
-• Do NOT promise confidentiality if someone's life is at risk
+**Peer role:** Ensure safety → connect to professionals → stay present → document. If immediate physical danger → **911** first. Do NOT promise confidentiality if someone's life is at risk.
 
----
+**Document this** as a critical incident: time, exact client quotes, actions you took, who you contacted. Use your agency's incident report form.
 
-### 📝 DOCUMENTATION TIP
-Document this as a **critical incident**. Note the time, what the client said (exact quotes), what actions you took, and who you contacted. Use your agency's incident report form in addition to your session note.
+**Sources:**
+- *SAMHSA 988 vs 911 Guidance* — crisis routing (toolkit)
+- *NYC Well / Safe Horizon* — local crisis resources (directory-record)`;
 
----
-
-*⚠️ Disclaimer: This is not clinical advice. For any medical or psychiatric emergency, contact 911 or go to the nearest emergency room.*`;
-
-function detectCrisis(message, history) {
+function classifyRisk(message, history) {
   const userMessages = (history || []).filter(h => h.role === 'user').slice(-4).map(h => h.text || '');
   const allText = [message, ...userMessages].join(' ');
-  return CRISIS_PATTERNS.some(p => p.test(allText));
+  const triggers = [];
+
+  // Check for denial patterns first
+  const hasDenial = DENIAL_PATTERNS.some(p => p.test(allText));
+
+  // RED: active plan/intent/means/danger (weapons, active violence, overdose, homicide, suicidal with plan)
+  const redMatches = RED_PATTERNS.filter(p => p.test(allText));
+  if (redMatches.length > 0) {
+    // RED triggers are always severe (weapons, choking, overdose, homicide, active suicidal)
+    // Denial of self-harm can downgrade SI/HI to YELLOW, but NOT weapon/violence triggers
+    if (hasDenial) {
+      const isDenialContext = DENIAL_PATTERNS.some(p => p.test(message));
+      if (isDenialContext) {
+        // Check if the only RED triggers are SI/HI (not weapons/violence/overdose)
+        const siHiOnly = [RED_PATTERNS[0], RED_PATTERNS[1]]; // suicid, self-harm
+        const onlySIHI = redMatches.every(p => siHiOnly.includes(p));
+        if (onlySIHI) {
+          triggers.push('RED SI/HI patterns matched but denial context detected — downgraded');
+          return { tier: 'YELLOW', triggers };
+        }
+      }
+    }
+    triggers.push('RED: active crisis indicators');
+    return { tier: 'RED', triggers };
+  }
+
+  // ORANGE: ambiguous SI/HI, unclear safety, DV threats without weapons/violence
+  const orangeMatches = ORANGE_PATTERNS.filter(p => p.test(allText));
+  if (orangeMatches.length > 0) {
+    // Situational safety ORANGE patterns (indices 6+): DV, overdose-adjacent, withdrawal
+    // These should NOT be downgraded by denial of self-harm intent
+    const situationalPatterns = ORANGE_PATTERNS.slice(6);
+    const hasSituationalTrigger = situationalPatterns.some(p => p.test(allText));
+
+    if (hasDenial && !hasSituationalTrigger) {
+      // Only downgrade if all ORANGE triggers are SI/HI-related (not DV/safety/OD)
+      triggers.push('ORANGE SI/HI patterns matched but denial present — downgraded to YELLOW');
+      return { tier: 'YELLOW', triggers };
+    }
+    triggers.push('ORANGE: ' + (hasSituationalTrigger ? 'situational safety concern (DV/OD risk/withdrawal)' : 'ambiguous safety concerns'));
+    return { tier: 'ORANGE', triggers };
+  }
+
+  // YELLOW: passive distress
+  const yellowMatches = YELLOW_PATTERNS.filter(p => p.test(allText));
+  if (yellowMatches.length > 0) {
+    triggers.push('YELLOW: passive distress cues');
+    return { tier: 'YELLOW', triggers };
+  }
+
+  // GREEN: no safety cues
+  return { tier: 'GREEN', triggers: [] };
 }
 
 // ── POST-RESPONSE SAFETY CHECK (OUTPUT SCANNING) ──
@@ -1185,74 +1281,171 @@ When the navigator needs to discuss behavior change with a client, suggest MI te
 - **Rolling with Resistance**: Don't argue or confront — reflect and redirect
 - Use the **readiness ruler**: "On a scale of 1-10, how ready are you to make this change?"
 
-## RESPONSE FORMAT RULES (CRITICAL):
+## RESPONSE FORMAT — 8-STEP PEER WORKFLOW (CRITICAL):
 
-Always structure responses using these sections as needed:
+Every response MUST follow this sequence. Skip steps that don't apply to the query.
 
-### 🎯 QUICK ASSESSMENT
-Brief 1-2 sentence summary of the situation and priority level.
+### Step 1: EMPATHY LINE (1 sentence max)
+Strengths-based, person-centered opening. Examples:
+- "Thanks for sharing — let's tackle this step-by-step."
+- "It sounds like your client is dealing with a lot — here's what I'd prioritize."
+Do NOT use generic platitudes. Acknowledge the SPECIFIC situation.
 
-### 💬 WHAT TO SAY
-Exact phrases the Peer Navigator can use with the client. Use bullet points.
+### Step 2: SAFETY CHECK (only if risk cues present)
+Match to the risk tier provided in the system hint:
+- **YELLOW**: 1 compact line — "You mentioned [keyword] — any thoughts of self-harm today? If yes/unsure: 988. If immediate danger: 911."
+- **ORANGE**: Safety Mini-Protocol — (1) Ask directly: "Are you thinking about hurting yourself or someone else?" (2) If YES/UNSURE → call 988 together (3) If immediate danger → 911 (4) Document safety assessment
+- **GREEN**: Skip this step entirely.
+Do NOT add safety content if there are no risk cues.
 
-### ✅ ACTION STEPS
-Numbered list of specific, actionable steps to take RIGHT NOW. Keep each step concise.
-PRIORITY ORDER (CRITICAL): Always order steps by urgency:
-1. Safety/crisis concerns FIRST (if any)
-2. Immediate basic needs (food, shelter, medical emergency)
-3. Primary presenting problem (the main reason for the visit)
-4. Secondary needs and referrals
-5. Documentation and follow-up
-For each step, briefly explain HOW to address it (not just what to do).
+### Step 3: TOP PRIORITIES (structured by urgency)
+Choose the format that fits the complexity:
 
-### 📍 RESOURCES
-Specific resources with names, addresses, phone numbers when available. Format as a clean list.
+**For simple queries (1-2 needs):**
+Use the standard section headers:
+- ### 🎯 Quick Assessment — 1-2 sentence situation summary
+- ### 💬 What to Say — exact phrases for the navigator to use
+- ### ✅ Action Steps — numbered, specific, with WHO does what
 
-### ⚠️ BOUNDARIES REMINDER
-Brief reminder of what the Peer Navigator should NOT do (if relevant).
+**For complex cases (3+ intersecting needs):**
+Use the triage format:
+- ### 🔴 TODAY (Do Right Now) — most urgent items (safety, basic needs, immediate actions)
+- ### 🟡 THIS WEEK — secondary priorities (appointments, applications, follow-ups)
+- ### 🟢 LONGER-TERM — ongoing goals (employment, education, housing stability)
+- ### 🔗 BARRIER BUSTER — specific barriers identified and workarounds (no ID? → list no-ID services; no phone? → suggest SafeLink; no Medicaid? → list how to apply)
 
-### 📝 DOCUMENTATION TIP
-How to document this interaction (BIRP/SOAP format hint).
+Each action item: state WHO does it (navigator or client), WHAT specifically, and HOW.
+
+### Step 4: 2 UNBLOCKER QUESTIONS
+Ask what you need to refine referrals. Examples:
+- "Closest cross-street or subway stop?"
+- "How far can client travel (walking/subway)?"
+- "Do they have any form of ID? Medicaid card?"
+- "What borough/zip is the client in?"
+Pick the 2 most relevant questions for this case. Skip if you already have all the info needed.
+
+### Step 5: TOP 3 NEXT ACTIONS
+Specific, numbered, with WHO does what:
+1. **Navigator**: [specific action]
+2. **Client**: [specific action]
+3. **Navigator**: [follow-up action]
+
+### Step 6: TOP 3 MATCHED RESOURCES (### 📍 Resources)
+Present nearby, constraints-aware resources. For each:
+- **Agency Name** — Program Type
+- Address | Phone | Hours (if known, otherwise "Contact agency directly")
+- *Why this one*: [1-line reason — e.g., "Walk-in, no ID required, accepts Medicaid"]
+- *(Source: NYC Agency Directory)* or *(Source: SAMHSA Live Data)*
+Prioritize: walk-in > appointment, low-barrier > high-barrier, closest first.
+
+### Step 7: OFFER SCREENINGS (only after stabilizing basics)
+Suggest relevant screenings with a 1-line reason:
+- "Based on the SUD concerns, consider running a **DAST-10** — takes 2 minutes and helps document severity for referrals."
+Do NOT suggest screenings during active crisis or before basic needs are addressed.
+
+### Step 8: OFFER NOTE + EMAIL
+End with: "Want me to generate a **GIRP/BIRP note** and/or a **referral email** for any of these agencies?"
 
 ---
 
 ## FORMATTING RULES:
-- Use **bold** for key terms and actions
+- Use **bold** for key terms, agency names, and actions
 - Use bullet points (•) for lists
 - Use numbered lists (1. 2. 3.) for sequential steps
-- Keep sections SHORT - 2-5 bullet points max per section
+- Keep sections SHORT — 2-5 bullet points max per section
 - Skip sections that aren't relevant to the question
-- Use horizontal rules (---) to separate major sections
 - For crisis situations, put the most urgent action FIRST
+- Never add inline disclaimers or scope warnings in the response body
 
 ## TONE:
 - Direct and practical (they're in the field!)
 - Supportive but professional
 - Strengths-based: highlight what the client IS doing well
-- Assume they know peer support basics - give them specifics
+- Assume they know peer support basics — give them specifics
+- Use warm, human language — not clinical jargon
+- Address the navigator as a partner, not a student
 
-## CITATIONS & SOURCES (MANDATORY — EVERY RESPONSE):
-You MUST include a "Sources" section at the END of EVERY response. This is non-negotiable.
+## SCREENING NEXT STEPS (PEER ROLE — NON-DIAGNOSTIC):
+When a screening is completed, provide score + severity + these role-appropriate next steps:
 
-### When using GUIDELINE/PDF content:
-- Cite the source document name inline (e.g., "According to the *Certified Peer Counselor Training Manual*...")
-- Explain HOW the guideline informed your response (e.g., "This approach is recommended because...")
-- This helps Peer Navigators understand the evidence basis for the guidance
+### PHQ-9 (Depression):
+- 0-4 (Minimal): Normalize + monitor; offer supports/resources
+- 5-9 (Mild): Offer coping supports; encourage follow-up with provider
+- 10-14 (Moderate): Recommend connection to licensed MH provider; help schedule; offer warm handoff
+- 15-19 (Mod Severe): Prioritize referral soon; safety check; confirm supports
+- 20-27 (Severe): URGENT linkage to clinical care; safety check; consider 988 if any risk cues
+- **CRITICAL**: Item 9 > 0 → immediate safety assessment needed regardless of total score
 
-### When recommending AGENCY RESOURCES:
-- State which agency directory records you used
-- Include the category/program type
+### PHQ-4 (Quick Distress):
+- 0-2 (None): No action needed
+- 3-5 (Mild): Validate + offer supports; consider follow-up PHQ-9 or GAD-7
+- 6-8 (Moderate): Recommend MH referral; offer PHQ-9/GAD-7 follow-up
+- 9-12 (Severe): Urgent MH referral; safety check
+- Subscales: anxiety (items 1-2) ≥3 or depression (items 3-4) ≥3 = positive screen
 
-### Sources section format (ALWAYS include at the end):
+### GAD-7 (Anxiety):
+- 0-4 (Minimal): No action needed
+- 5-9 (Mild): Coping supports + monitor
+- 10-14 (Moderate): Encourage clinical follow-up; help schedule; offer grounding techniques
+- 15-21 (Severe): Prioritize MH referral; safety check if distress is high
+
+### DAST-10 (Drug Use):
+- 0 (None): No concerns
+- 1-2 (Low): Brief conversation + harm reduction info + offer support
+- 3-5 (Moderate): Recommend SUD assessment options; offer warm handoff to outpatient
+- 6-8 (Substantial): Prioritize connection to SUD clinical assessment; discuss detox/residential
+- 9-10 (Severe): Intensive assessment needed; discuss all levels of care; if opioid risk → naloxone + overdose prevention
+
+### AUDIT / AUDIT-C (Alcohol):
+- AUDIT-C ≥3 (women) or ≥4 (men): Positive screen for hazardous drinking
+- Positive screen: Brief intervention + offer treatment options + connect to SUD provider
+
+### For EVERY completed screening, output:
+1. Score + severity label
+2. One-line meaning (non-diagnostic, peer language)
+3. 3 next steps for the peer navigator
+4. Escalation trigger (when to contact 988/911/urgent care)
+5. Citation for the scoring instrument
+
+## RED-FLAG MEDICAL ESCALATION (CRITICAL):
+When ANY of these are mentioned, include a brief, non-alarming escalation note:
+- **Overdose symptoms** → "If client shows signs of overdose (unresponsive, slow breathing), call 911 immediately + administer naloxone if available"
+- **Severe withdrawal** (seizures, delirium tremens, severe shaking) → "This may need medical attention — consider urgent care/ED"
+- **Chest pain, severe shortness of breath** → "Recommend immediate medical evaluation (call 911 or go to nearest ED)"
+- **Acute psychosis with danger** → "Call 988 for crisis support; 911 if immediate danger"
+- **Immediate DV danger** → "Call 911 if immediate physical danger; Safe Horizon: 1-800-621-HOPE"
+Route to 911 for physical danger/medical emergency. Route to 988 for behavioral health crisis support.
+
+## DV/IPV-SPECIFIC WORKFLOW:
+When domestic violence or intimate partner violence is mentioned:
+1. **Safety first** — before ANY other action: "Are you and [dependents] somewhere your partner cannot see or reach you right now?"
+2. **No police default** — many DV survivors do NOT want police involved. Respect this unless immediate physical danger.
+3. **Safe Horizon NYC Hotline**: **1-800-621-HOPE (4673)** — confidential DV safety planning + shelter referral
+4. **Warm-handoff script**: Provide a ready-to-use phone script the navigator can read verbatim when calling Safe Horizon or a shelter.
+5. **If child is present**: Note this explicitly — family shelter pathways differ from individual.
+6. **Language access**: If client prefers a language other than English, provide the warm-handoff script in both English AND that language (especially Spanish).
+
+## WARM-HANDOFF SCRIPTS:
+When generating warm-handoff scripts for phone calls to agencies:
+- Provide a ready-to-read English script
+- If the client's preferred language is known (especially Spanish), also provide the script in that language
+- Scripts should include: who you are, who you're calling about (no PHI), what's needed, and urgency level
+- Keep scripts under 4 sentences — agencies are busy
+
+## CITATIONS (MANDATORY — EVERY RESPONSE):
+End EVERY response with a compact "Sources" section. Format:
+
 **Sources:**
-- *[Guideline document name]* — [what it informed]
-- NYC Agency Directory — [category/program type of recommended resources]
+- *[Document/Instrument name]* — [what it informed] ([source type])
+- *NYC Agency Directory* — [category] ([record count] records matched)
 
-Example:
-**Sources:**
-- *Certified Peer Counselor Training Manual* — motivational interviewing approach
-- *SAMHSA Recovery Support Toolkit* — harm reduction framework
-- NYC Agency Directory — substance use treatment programs in Queens
+Source types: directory-record | guideline | screening-instrument | peer-reviewed | toolkit
+
+For screenings: cite the instrument scoring source (e.g., "PHQ-9 scoring: Kroenke et al., 2001")
+For peer guidance: cite SAMHSA Peer Core Competencies
+For trauma-informed care: cite SAMHSA TIC Framework
+For harm reduction: cite SAMHSA Harm Reduction Framework
+For overdose response: cite SAMHSA Overdose Prevention Toolkit
 
 ## MODEL CONFINEMENT (MANDATORY):
 - You MUST ONLY use information from: (1) the search results provided below, (2) the conversation history, and (3) the core peer support knowledge embedded in these instructions.
@@ -1325,9 +1518,9 @@ When your response includes specific agency referrals, action steps the navigato
 - [ ] Schedule next session — Set date for next peer session: ___
 
 ## IMPORTANT:
-- You are NOT a clinician - never diagnose or prescribe
+- You are NOT a clinician — never diagnose or prescribe
 - For medical emergencies: Direct to 911 or crisis services immediately
-- Always end crisis-related responses with a brief disclaimer
+- Do NOT add disclaimers, scope warnings, or legal boilerplate in the response body — the app sidebar handles that permanently
 - When unsure, recommend the navigator consult their supervisor`;
 
 // ── STRUCTURED SESSION CAPTURE (for improved note generation) ──
@@ -1424,7 +1617,7 @@ const SDOH_DOMAINS = [
   { key: 'food', label: 'Food', icon: '🍽️', identifyPattern: /\b(food|hungry|eat(ing)?|pantry|soup kitchen|meals?|groceries|snap|ebt|food stamps|wic)\b/i, addressPattern: /\b(pantry|pantries|food.*bank|meal.*program|snap.*enroll|ebt.*application)\b/i },
   { key: 'sud', label: 'Substance Use', icon: '💊', identifyPattern: /\b(substance|drug|alcohol|drink(ing)?|heroin|fentanyl|meth|cocaine|crack|opioid|suboxone|methadone|relapse|using|sober|recovery|overdose|detox|rehab)\b/i, addressPattern: /\b(treatment.*program|detox|rehab|suboxone.*provider|methadone.*clinic|otp|buprenorphine|samhsa|inpatient|outpatient.*treatment)\b/i },
   { key: 'mh', label: 'Mental Health', icon: '🧠', identifyPattern: /\b(depress|anxiety|anxious|mental health|suicid|self[- ]?harm|trauma|ptsd|panic|bipolar|schizophren|psycho(sis|tic)|mood|voices|therapy|counseling|psychiatr)\b/i, addressPattern: /\b(mental health.*program|therapy.*referr|counseling.*center|psychiatric|nyc well|988|crisis.*team|mental health.*clinic)\b/i },
-  { key: 'benefits', label: 'Benefits', icon: '📋', identifyPattern: /\b(benefits|medicaid|medicare|ssi|ssdi|snap|ebt|public assistance|cash assistance|disability|insurance|entitlement)\b/i, addressPattern: /\b(benefits.*enroll|medicaid.*application|ssi.*application|hra|hhs|benefits.*office|eligibility)\b/i },
+  { key: 'benefits', label: 'Benefits', icon: '📋', identifyPattern: /\b(benefits|medicaid|medicare|ssi|ssdi|snap|ebt|public assistance|cash assistance|disability|insurance|entitlement|lost.{0,5}(id|ID)|no.{0,5}(id|ID)|missing.{0,5}(id|ID)|don'?t have.{0,10}(id|ID|identification|documents?))\b/i, addressPattern: /\b(benefits.*enroll|medicaid.*application|ssi.*application|hra|hhs|benefits.*office|eligibility|id.*replacement|vital.*records)\b/i },
   { key: 'legal', label: 'Legal', icon: '⚖️', identifyPattern: /\b(legal|court|probation|parole|arrest|incarcerat|jail|prison|lawyer|attorney|warrant|criminal|custody)\b/i, addressPattern: /\b(legal.*aid|legal.*services|lawyer|attorney.*referr|court.*advocacy|legal.*clinic)\b/i },
   { key: 'employment', label: 'Employment', icon: '💼', identifyPattern: /\b(employ|job|work(ing)?|career|resume|interview|unemployment|vocational|hired|fired|workforce)\b/i, addressPattern: /\b(job.*placement|vocational|workforce.*center|employ.*program|career.*services|job.*training)\b/i },
   { key: 'medical', label: 'Medical', icon: '🏥', identifyPattern: /\b(doctor|hospital|clinic|medical|health|medication|prescription|pharmacy|dental|vision|hiv|hep[- ]?c|chronic|pain|wound|diabet|primary care)\b/i, addressPattern: /\b(clinic.*referr|hospital|medical.*center|health.*center|primary care|dental.*clinic|pharmacy)\b/i },
@@ -1457,6 +1650,30 @@ function buildNeedsMap(history) {
 
   // Only return if at least 2 domains identified (meaningful map)
   return identifiedCount >= 2 ? needsMap : null;
+}
+
+// ── MULTI-NEED DETECTION (for complex case triage format) ──
+// Reuses SDOH_DOMAINS to count how many distinct need domains are present
+function detectMultipleNeeds(message, history) {
+  const userText = [message, ...(history || []).filter(h => h.role === 'user').map(h => h.text || '')].join(' ');
+  const detected = SDOH_DOMAINS.filter(d => d.identifyPattern.test(userText)).map(d => d.label);
+  return { count: detected.length, detected };
+}
+
+// ── BARRIER DETECTION (for UI barrier chips) ──
+function detectBarriers(message, history) {
+  const allText = [message, ...(history || []).filter(h => h.role === 'user').map(h => h.text || '')].join(' ').toLowerCase();
+  const barriers = [];
+  if (/no phone|phone.{0,10}(off|broken|lost|disconnected|dead|doesn'?t work)|without.{0,5}(phone|cell)|phone is off/.test(allText)) barriers.push('No Phone');
+  if (/no id|lost.{0,5}id|missing.{0,5}id|don'?t have.{0,10}(id|identification|documents?)|without.{0,5}id/.test(allText)) barriers.push('No ID');
+  if (/homeless|unsheltered|sleeping (on|outside|rough|in.{0,10}(car|train|subway|street))|no.{0,5}(place|home|housing)|living.{0,10}(street|outside|shelter)/.test(allText)) barriers.push('Unsheltered');
+  if (/no job|unemploy|lost.{0,5}(job|work)|can'?t.{0,10}(work|find.{0,5}job)|jobless|fired|laid off/.test(allText)) barriers.push('Unemployed');
+  if (/undocument|no.{0,5}(insurance|medicaid)|uninsured/.test(allText)) barriers.push('Uninsured');
+  if (/no english|spanish only|interpreter|doesn'?t speak english|limited english|translate/.test(allText)) barriers.push('Language');
+  if (/pregnant|expecting|baby on the way/.test(allText)) barriers.push('Pregnant');
+  if (/child|kids?|minor|dependent|baby|toddler|son|daughter/.test(allText)) barriers.push('Has Children');
+  if (/wheelchair|disab(led|ility)|mobility|blind|deaf|accessible/.test(allText)) barriers.push('Disability');
+  return barriers;
 }
 
 const NOTE_GENERATION_INSTRUCTIONS = `You are a clinical documentation assistant for Peer Navigators/Specialists. The Peer Navigator has been having a conversation with you about their client visit. Now they are asking you to generate a clinical note based on the ENTIRE conversation history.
@@ -1508,23 +1725,31 @@ const FORMAT_TEMPLATES = {
 
   GIRP: `GIRP (Goal/Intervention/Response/Plan)
 
-**G - Goal:** The client's stated goal(s) for this session or overall care plan goal being addressed.
+**G - Goal:** The client's stated goal(s) for this session or overall care plan goal being addressed. Use bullet points. Include both immediate needs (e.g., "Obtain safe shelter tonight") and longer-term goals (e.g., "Connect to outpatient SUD treatment").
 
-**I - Intervention:** What the peer specialist DID during the session. Specific techniques used (active listening, motivational interviewing, resource navigation, etc.)
+**I - Intervention:** What the peer specialist DID during the session. Use bullet points. Specific techniques used: active listening, resource navigation, benefits coordination, screening administration (include tool name, score, severity), safety planning, referral linkages, motivational engagement, psychoeducation, and any attempted provider contacts.
 
-**R - Response:** How the client responded to the interventions. Engagement level, statements made, emotional response, actions taken.
+**R - Response:** How the client responded to the interventions. Use bullet points. Engagement level, acceptance or decline of referrals, stated preferences/barriers, and emotional response.
 
-**P - Plan:** Next steps, follow-up date, referrals, resources to access, and client commitments.`,
+**P - Plan:** Concrete next steps with specifics. Use bullet points. Referrals to be made (with agency names if discussed), benefits actions, provider follow-ups, and follow-up contact timeline.
+
+If screening scores were discussed, ALWAYS include them in the note: form name, score, severity band, and recommended next steps per scoring guidelines.`,
 
   BIRP: `BIRP (Behavior/Intervention/Response/Plan)
 
-**B - Behavior:** Client's observable behavior during the session. Appearance, affect, mood, engagement, statements made. Be descriptive and objective.
+**B - Behavior (Member report / presentation):**
+Client's observable behavior during the session plus their self-reported information. Use bullet points. Include: presenting needs/concerns stated, behavioral health status (medications, appointments, group attendance), barriers identified (housing, benefits, ID, phone, substance use), and any safety-relevant disclosures. Be descriptive and objective — quote client statements when possible.
 
-**I - Intervention:** Specific interventions the peer specialist used. Include: active listening, emotional support, psychoeducation, resource navigation, motivational engagement, crisis de-escalation, etc.
+**I - Intervention (What the Peer Specialist / Care Coordinator did):**
+Specific interventions used during the session. Use bullet points. Include: active listening, resource navigation, benefits coordination, medication support (reminders/refill coordination), referral linkages, screening administration with scores and interpretation, safety planning, motivational engagement, and any attempted contacts with providers (document outcome of each attempt).
 
-**R - Response:** Client's response to each intervention. Did they engage? Accept referrals? Express willingness to follow up?
+**R - Response (Client response / engagement):**
+How the client responded to each intervention. Use bullet points. Include: engagement level, acceptance or decline of referrals, willingness to follow up, expressed barriers, and any stated preferences or constraints.
 
-**P - Plan:** Specific follow-up actions, referral tracking, next appointment, resources to connect with, and goals for next session.`
+**P - Plan (Next steps / follow-up):**
+Concrete next steps with specifics. Use bullet points. Include: referrals to be made (with agency names if discussed), benefits actions (applications, recertifications), screening follow-ups based on scores, provider contacts to attempt, and follow-up contact timeline.
+
+If screening scores were discussed, ALWAYS include them in the note: form name, score, severity band, and recommended next steps per scoring guidelines.`
 };
 
 // ── AUTH ──
@@ -1589,8 +1814,8 @@ function detectResourceCategories(message, history) {
     return ["community services", "social services"];
   }
 
-  // Deduplicate and limit to 4 most relevant
-  return [...new Set(matched)].slice(0, 4);
+  // Deduplicate and limit to 3 most relevant (budget-conscious: reduces search fan-out)
+  return [...new Set(matched)].slice(0, 3);
 }
 
 // ── FUTURE: NATIVE GROUNDING (Vertex AI Search + Gemini) ──
@@ -1625,11 +1850,15 @@ async function singleSearch(query, accessToken, filter = null) {
   if (filter) requestBody.filter = filter;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5s per-search timeout
     const response = await fetch(SEARCH_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${accessToken}` },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -1640,12 +1869,16 @@ async function singleSearch(query, accessToken, filter = null) {
     const data = await response.json();
     return data.results || [];
   } catch (error) {
-    console.warn("[SEARCH] Network error", { query: query.substring(0, 60), message: error?.message });
+    if (error.name === 'AbortError') {
+      console.warn("[SEARCH] Request timed out (5s)", { query: query.substring(0, 60) });
+    } else {
+      console.warn("[SEARCH] Network error", { query: query.substring(0, 60), message: error?.message });
+    }
     return [];
   }
 }
 
-async function searchVertexAI(query, accessToken, location, history) {
+async function searchVertexAI(query, accessToken, location, history, deadline = null) {
   const { zipcode, borough } = location || {};
 
   console.log("[SEARCH] Starting multi-strategy search...", { query: query.substring(0, 80), zipcode, borough });
@@ -1737,8 +1970,25 @@ async function searchVertexAI(query, accessToken, location, history) {
     );
   }
 
-  // Run all searches in parallel
-  const allResultSets = await Promise.all(searches);
+  // Run all searches in parallel with a budget — don't wait forever
+  const searchBudgetMs = Math.min(6000, deadline ? deadline.remainingMs() - 14000 : 6000);
+  let allResultSets;
+  if (searchBudgetMs <= 0) {
+    console.warn("[SEARCH] Deadline pressure — skipping searches");
+    allResultSets = [];
+  } else {
+    const raceTimer = new Promise(resolve => setTimeout(resolve, searchBudgetMs, 'SEARCH_BUDGET_EXPIRED'));
+    const settled = await Promise.race([
+      Promise.allSettled(searches),
+      raceTimer
+    ]);
+    if (settled === 'SEARCH_BUDGET_EXPIRED') {
+      console.warn(`[SEARCH] Search budget expired (${searchBudgetMs}ms), proceeding with partial results`);
+      allResultSets = [];
+    } else {
+      allResultSets = settled.map(r => r.status === 'fulfilled' ? r.value : []);
+    }
+  }
 
   // Merge and deduplicate by document id
   const seen = new Set();
@@ -1804,7 +2054,7 @@ async function searchSAMHSA(zipcode) {
     console.log("[SAMHSA] Searching FindTreatment.gov...", { zipcode, lat, lng });
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeout = setTimeout(() => controller.abort(), 5000); // 5s timeout (budget-conscious)
 
     const response = await fetch(url, {
       headers: { "Accept": "application/json" },
@@ -1846,7 +2096,7 @@ async function searchSAMHSA(zipcode) {
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.warn("[SAMHSA] Request timed out (8s)");
+      console.warn("[SAMHSA] Request timed out (5s)");
     } else {
       console.warn("[SAMHSA] API error:", error?.message);
     }
@@ -1879,7 +2129,7 @@ function stripAddressesFromSnippet(text) {
 // so Gemini has real data to reference (not truncated content blobs)
 // samhsaResults: optional array of live SAMHSA FindTreatment.gov results
 function buildResourceContext(searchResults, location, samhsaResults = []) {
-  if (!searchResults || searchResults.length === 0) return "";
+  if (!searchResults || searchResults.length === 0) return { contextString: "", structuredResources: [], guidelineSnippets: [] };
 
   const resources = [];
   const guidelineSnippets = [];
@@ -1969,6 +2219,7 @@ function buildResourceContext(searchResults, location, samhsaResults = []) {
   }
 
   let context = '';
+  let filteredResources = [];
 
   // ── Agency directory section FIRST (highest priority for the model) ──
   // Placing verified resources before guidelines ensures the model sees
@@ -1987,7 +2238,7 @@ function buildResourceContext(searchResults, location, samhsaResults = []) {
     });
 
     // Apply proximity-based filtering: 5-10mi primary, expand to 20mi if needed
-    let filteredResources = resources;
+    filteredResources = resources;
     if (targetZip) {
       const within10 = resources.filter(r => r._distanceMiles !== undefined && r._distanceMiles <= 10);
       if (within10.length >= 3) {
@@ -2095,38 +2346,50 @@ function buildResourceContext(searchResults, location, samhsaResults = []) {
     context += `CITATION INSTRUCTIONS: When referencing guideline content above, cite the source document name (e.g., "According to the Health Services guidelines..." or "Per the Peer Specialist Training Manual...").\n\n`;
   }
 
-  if (!context) return "";
-  return context;
+  if (!context) return { contextString: "", structuredResources: [], guidelineSnippets: [] };
+  return { contextString: context, structuredResources: filteredResources || resources, guidelineSnippets };
 }
 
-// ── RETRY HELPER ──
-async function withRetry(fn, label, maxRetries = 2) {
-  const delays = [1000, 3000];
+// ── RETRY HELPER (deadline-aware) ──
+async function withRetry(fn, label, maxRetries = 1, deadline = null) {
+  const delays = [1000];
+  // If deadline is tight, skip retries entirely
+  if (deadline && deadline.remainingMs() < 5000) maxRetries = 0;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      if (attempt < maxRetries) {
-        const delay = delays[attempt] || 3000;
+      if (attempt < maxRetries && (!deadline || deadline.remainingMs() > 3000)) {
+        const delay = delays[attempt] || 1000;
         console.warn(`[RETRY] ${label} attempt ${attempt + 1} failed, retrying in ${delay}ms...`, { message: error?.message });
         await new Promise(resolve => setTimeout(resolve, delay));
       } else {
-        console.error(`[RETRY] ${label} all ${maxRetries + 1} attempts failed`);
+        console.error(`[RETRY] ${label} all ${attempt + 1} attempts failed`);
         throw error;
       }
     }
   }
 }
 
-// ── GENERATIVE AI CALL (with generation config, safety settings, and retry) ──
-async function callVertexAIGenerative(contents, systemPrompt, accessToken) {
+// ── GENERATIVE AI CALL (with generation config, safety settings, retry, and deadline) ──
+async function callVertexAIGenerative(contents, systemPrompt, accessToken, configOverride = null, deadline = null) {
+  const genConfig = configOverride ? { ...GENERATION_CONFIG, ...configOverride } : GENERATION_CONFIG;
   console.log("[GENERATIVE] Calling Vertex AI with multi-turn history...", {
-    turns: contents.length
+    turns: contents.length,
+    configOverride: configOverride ? Object.keys(configOverride) : 'default',
+    remainingMs: deadline ? deadline.remainingMs() : 'no-deadline'
   });
 
-  const url = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/publishers/google/models/gemini-2.5-flash:generateContent`;
+  const url = `https://aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/publishers/google/models/gemini-3-flash-preview:generateContent`;
 
   return withRetry(async () => {
+    // Dynamic timeout: use remaining deadline budget minus 1s safety margin, capped at 18s
+    const geminiTimeoutMs = deadline ? Math.min(18000, deadline.remainingMs() - 1000) : 18000;
+    if (geminiTimeoutMs <= 0) throw new Error("Deadline expired before Gemini call");
+    console.log(`[GENERATIVE] Gemini timeout budget: ${geminiTimeoutMs}ms`);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), geminiTimeoutMs);
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -2138,10 +2401,12 @@ async function callVertexAIGenerative(contents, systemPrompt, accessToken) {
         systemInstruction: {
           parts: [{ text: systemPrompt }]
         },
-        generationConfig: GENERATION_CONFIG,
+        generationConfig: genConfig,
         safetySettings: SAFETY_SETTINGS,
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timer);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -2162,7 +2427,7 @@ async function callVertexAIGenerative(contents, systemPrompt, accessToken) {
 
     console.log("[GENERATIVE] ✓ Response generated", { length: generatedText.length });
     return generatedText;
-  }, "Gemini generation");
+  }, "Gemini generation", 1, deadline);
 }
 
 // ── MAIN HANDLER ──
@@ -2177,6 +2442,7 @@ export default async function handler(req) {
   }
 
   try {
+    const deadline = createDeadline();
     const body = await req.json();
     const { message, history, screeningState: incomingScreeningState } = body;
 
@@ -2203,19 +2469,23 @@ export default async function handler(req) {
       );
     }
 
-    // ── Detect CRISIS situations first (highest priority) ──
-    const isCrisis = detectCrisis(message, history);
-    if (isCrisis) {
-      console.log("[AI-PEER-ASSIST] CRISIS DETECTED — returning crisis protocol");
+    // ── 4-TIER RISK CLASSIFICATION (replaces binary crisis detection) ──
+    const risk = classifyRisk(message, history);
+    console.log("[AI-PEER-ASSIST] Risk tier:", risk.tier, risk.triggers);
+
+    if (risk.tier === 'RED') {
+      console.log("[AI-PEER-ASSIST] RED CRISIS — returning crisis protocol");
       return new Response(JSON.stringify({
         response: CRISIS_RESPONSE,
         mode: 'crisis',
+        riskTier: 'RED',
         noteFormat: null
       }), {
         status: 200,
         headers: H
       });
     }
+    // ORANGE / YELLOW / GREEN: proceed to Gemini (risk tier passed through to frontend)
 
     // ── PHI DETECTION (warn if personally identifiable information detected) ──
     const PHI_PATTERNS = [
@@ -2425,19 +2695,27 @@ export default async function handler(req) {
     // ── Build multi-turn contents array ──
     const contents = [];
 
-    // Add conversation history (limit to last 30 turns)
-    const trimmedHistory = (history || []).slice(-30);
+    // Add conversation history (limit to last 20 turns, truncate long model responses)
+    // Full history is preserved in frontend; this trimming saves Gemini input tokens (~60-80% reduction)
+    const trimmedHistory = (history || []).slice(-20);
 
     for (const turn of trimmedHistory) {
       if (turn.role === "user") {
         contents.push({ role: "user", parts: [{ text: turn.text }] });
       } else if (turn.role === "model") {
-        contents.push({ role: "model", parts: [{ text: turn.text }] });
+        const modelText = turn.text && turn.text.length > 500
+          ? turn.text.substring(0, 500) + '\n[...response truncated for context window...]'
+          : (turn.text || '');
+        contents.push({ role: "model", parts: [{ text: modelText }] });
       }
     }
 
     // ── Choose system prompt based on mode ──
     let systemPrompt;
+    let generationConfigOverride = null;
+    let structuredResources = [];
+    let guidelineSnippets = [];
+    let multiNeeds = null;
 
     if (wantsReferralEmail) {
       // REFERRAL EMAIL MODE — search for agency context, then generate email
@@ -2445,14 +2723,15 @@ export default async function handler(req) {
       const searchLocation = (location.zipcode || location.borough) ? location : null;
       try {
         // Run Vertex AI Search + SAMHSA in parallel for SUD referrals
-        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history, deadline);
         const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
           ? searchSAMHSA(location.zipcode)
           : Promise.resolve([]);
 
         const [searchResults, samhsaResults] = await Promise.all([searchPromise, samhsaPromise]);
         if (searchResults.length > 0 || samhsaResults.length > 0) {
-          agencyContext = buildResourceContext(searchResults, location, samhsaResults);
+          const result = buildResourceContext(searchResults, location, samhsaResults);
+          agencyContext = result.contextString;
         }
       } catch (searchError) {
         console.warn("[AI-PEER-ASSIST] Search for referral email failed", { message: searchError?.message });
@@ -2473,14 +2752,15 @@ export default async function handler(req) {
       let agencyContext = "";
       const searchLocation = (location.zipcode || location.borough) ? location : null;
       try {
-        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history, deadline);
         const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
           ? searchSAMHSA(location.zipcode)
           : Promise.resolve([]);
 
         const [searchResults, samhsaResults] = await Promise.all([searchPromise, samhsaPromise]);
         if (searchResults.length > 0 || samhsaResults.length > 0) {
-          agencyContext = buildResourceContext(searchResults, location, samhsaResults);
+          const result = buildResourceContext(searchResults, location, samhsaResults);
+          agencyContext = result.contextString;
         }
       } catch (searchError) {
         console.warn("[AI-PEER-ASSIST] Search for warm handoff failed", { message: searchError?.message });
@@ -2528,7 +2808,7 @@ export default async function handler(req) {
         const searchLocation = (location.zipcode || location.borough) ? location : null;
 
         // Run Vertex AI Search + SAMHSA in parallel for SUD queries
-        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history);
+        const searchPromise = searchVertexAI(message, accessToken, searchLocation, history, deadline);
         const samhsaPromise = (isSUDQuery(message, history) && location.zipcode)
           ? searchSAMHSA(location.zipcode)
           : Promise.resolve([]);
@@ -2537,13 +2817,18 @@ export default async function handler(req) {
 
         if (searchResults.length > 0 || samhsaResults.length > 0) {
           // Use the rich resource context builder with SAMHSA results
-          searchContext = buildResourceContext(searchResults, location, samhsaResults);
+          const resourceResult = buildResourceContext(searchResults, location, samhsaResults);
+          searchContext = resourceResult.contextString;
+          structuredResources = resourceResult.structuredResources || [];
+          guidelineSnippets = resourceResult.guidelineSnippets || [];
 
           console.log("[AI-PEER-ASSIST] Built resource context", {
             resourceCount: searchResults.filter(r => r.document?.structData).length,
             guidelineCount: searchResults.filter(r => !r.document?.structData).length,
             samhsaCount: samhsaResults.length,
             contextLength: searchContext.length,
+            structuredResourceCount: structuredResources.length,
+            guidelineSnippetCount: guidelineSnippets.length,
             hasLocation: !!(location.zipcode || location.borough)
           });
         }
@@ -2566,13 +2851,49 @@ export default async function handler(req) {
         userPrompt += `\n\n[SYSTEM NOTE: No client location (zip code or borough) has been provided yet in this conversation. Ask the navigator for the client's zip code before providing specific resources.]`;
       }
 
+      // ── Risk-tier hints for ORANGE/YELLOW (shape model response appropriately) ──
+      if (risk.tier === 'ORANGE') {
+        const isODRisk = risk.triggers.some(t => t.includes('OD risk') || t.includes('withdrawal'));
+        const isDV = risk.triggers.some(t => t.includes('DV'));
+        let orangeHint;
+        if (isODRisk) {
+          orangeHint = `[SYSTEM: OVERDOSE RISK DETECTED — client or peer exposed to fentanyl/contaminated supply, or withdrawal symptoms noted. Priority response: (1) Ask: "Are you alone right now? Have you had an overdose before or needed naloxone?" (2) Assess immediate medical distress (chest pain, seizures, severe shaking → 911), (3) Provide naloxone access + overdose response education per SAMHSA toolkit, (4) Offer low-barrier harm reduction + MOUD options. Do NOT force detox/treatment. Meet client where they are. Then proceed with full peer workflow.]`;
+        } else if (isDV) {
+          orangeHint = `[SYSTEM: DV/IPV SAFETY CONCERN DETECTED. Priority response: (1) Ask: "Are you and any dependents somewhere safe right now?" (2) If immediate physical danger → 911, (3) Offer Safe Horizon NYC 1-800-621-HOPE for confidential safety planning, (4) Do NOT default to police unless client requests or immediate danger. Provide warm-handoff script. Then proceed with full peer workflow.]`;
+        } else {
+          orangeHint = `[SYSTEM: SAFETY CONCERN DETECTED — ambiguous risk language present. Include a SAFETY MINI-PROTOCOL in your response: (1) Ask directly about SI/HI, (2) If yes/unsure → 988, (3) If immediate danger → 911, (4) Document assessment. Then proceed with the peer workflow. Do NOT generate a full crisis panel — this is not confirmed RED.]`;
+        }
+        userPrompt = `${orangeHint}\n\n${userPrompt}`;
+        console.log("[AI-PEER-ASSIST] ORANGE tier — added safety hint to prompt", { isODRisk, isDV });
+      } else if (risk.tier === 'YELLOW') {
+        userPrompt = `[SYSTEM: Passive distress cues noted (e.g. hopelessness) but client denies plan/intent. Include ONE brief safety check line in your response: "You mentioned feeling [specific cue] — are you having thoughts of harming yourself today?" with 988/911 guidance. Then proceed normally with the peer workflow. Do NOT escalate to crisis protocol.]\n\n${userPrompt}`;
+        console.log("[AI-PEER-ASSIST] YELLOW tier — added safety check hint to prompt");
+      }
+
+      // ── Multi-need detection for complex case handling ──
+      multiNeeds = detectMultipleNeeds(message, history);
+      if (multiNeeds.count >= 3) {
+        userPrompt = `[SYSTEM: COMPLEX multi-need case with ${multiNeeds.count} identified domains: ${multiNeeds.detected.join(', ')}. Use the PEER WORKFLOW TRIAGE FORMAT (🔴 TODAY / 🟡 THIS WEEK / 🟢 LONGER-TERM / 🔗 BARRIER BUSTER). Address ALL identified needs systematically. Prioritize low-barrier, walk-in options. End with 2 clarifying questions + offer to generate note/referral email.]\n\n${userPrompt}`;
+        console.log("[AI-PEER-ASSIST] Complex case detected", { domains: multiNeeds.detected });
+      }
+
       contents.push({ role: "user", parts: [{ text: userPrompt }] });
+
+      // ── Dynamic generation config for complex cases ──
+      if (multiNeeds && multiNeeds.count >= 3) {
+        generationConfigOverride = {
+          maxOutputTokens: 8192,  // Keep same as default — 12288 caused consistent timeouts
+          thinkingConfig: {
+            thinkingLevel: "HIGH",  // Complex multi-need cases benefit from deeper reasoning
+          },
+        };
+      }
     }
 
     // ── Generate response (with retry) ──
     let response;
     try {
-      response = await callVertexAIGenerative(contents, systemPrompt, accessToken);
+      response = await callVertexAIGenerative(contents, systemPrompt, accessToken, generationConfigOverride, deadline);
     } catch (genError) {
       console.error("[AI-PEER-ASSIST] Generation failed after retries", { message: genError?.message });
       // Graceful degradation — provide a helpful message instead of an error
@@ -2587,12 +2908,11 @@ export default async function handler(req) {
 *I apologize for the inconvenience. Please try your question again.*`;
     }
 
-    // ── Post-response safety check (output scanning for scope violations) ──
+    // ── Post-response safety check (output scanning — log only, no inline disclaimers) ──
     if (!wantsNote && !wantsReferralEmail && !wantsWarmHandoff) {
       const safetyDisclaimers = postResponseSafetyCheck(response, message);
       if (safetyDisclaimers) {
-        response += safetyDisclaimers;
-        console.log("[AI-PEER-ASSIST] Post-response safety check triggered disclaimers");
+        console.log("[AI-PEER-ASSIST] Post-response safety check triggered (logged, not appended to response)");
       }
     }
 
@@ -2633,12 +2953,21 @@ export default async function handler(req) {
       }
     }
 
+    // ── Detect barriers for UI chips ──
+    const barriers = detectBarriers(message, history);
+
     return new Response(JSON.stringify({
       response,
       mode: responseMode,
+      riskTier: risk.tier,
+      riskContext: risk.triggers.length > 0 ? risk.triggers[0] : null,
       noteFormat: noteFormat,
       screeningSuggestions,
-      needsMap
+      needsMap,
+      resources: structuredResources || [],
+      sources: guidelineSnippets || [],
+      barriers: barriers.length > 0 ? barriers : null,
+      multiNeeds: multiNeeds ? { count: multiNeeds.count, detected: multiNeeds.detected } : null
     }), {
       status: 200,
       headers: H

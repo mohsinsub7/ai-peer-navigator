@@ -30,3 +30,10 @@ functions = "netlify/functions"
     "netlify/functions/**"
   ]
   node_bundler = "esbuild"
+
+  [functions.ai-peer-assist-chat]
+  external_node_modules = []
+  timeout = 26
+
+  [functions.generate-note]
+  timeout = 26

@@ -9,7 +9,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 const H = { "content-type": "application/json", "access-control-allow-origin": "*" };
-const MODEL = process.env.AI_INSIGHTS_MODEL || process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const MODEL = process.env.AI_INSIGHTS_MODEL || process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 const APIKEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
 function timestamp() {
@@ -644,8 +644,7 @@ async function processInBackground(jobId, manifestKey, profileKey, domains, file
       model: MODEL,
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.7,
-        topK: 40,
+        temperature: 1.0,
         topP: 0.95,
       }
     });

@@ -12,7 +12,7 @@ export default async (req) => {
   try {
     const { profile, sampleData = [] } = await req.json();
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-    const model  = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    const model  = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 
     const ai = new GoogleGenAI({ apiKey });
     const resp = await ai.models.generateContent({
