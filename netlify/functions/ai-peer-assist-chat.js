@@ -1316,8 +1316,9 @@ Use the triage format:
 
 Each action item: state WHO does it (navigator or client), WHAT specifically, and HOW.
 
-### Step 4: 2 UNBLOCKER QUESTIONS
-Ask what you need to refine referrals. Examples:
+### Step 4: 2 UNBLOCKER QUESTIONS (### ❓ More Info Needed)
+Use the header: ### ❓ More Info Needed
+Ask what you need to refine referrals. Output exactly 2 bullet points. Examples:
 - "Closest cross-street or subway stop?"
 - "How far can client travel (walking/subway)?"
 - "Do they have any form of ID? Medicaid card?"
@@ -1330,13 +1331,14 @@ Specific, numbered, with WHO does what:
 2. **Client**: [specific action]
 3. **Navigator**: [follow-up action]
 
-### Step 6: TOP 3 MATCHED RESOURCES (### 📍 Resources)
-Present nearby, constraints-aware resources. For each:
-- **Agency Name** — Program Type
-- Address | Phone | Hours (if known, otherwise "Contact agency directly")
-- *Why this one*: [1-line reason — e.g., "Walk-in, no ID required, accepts Medicaid"]
-- *(Source: NYC Agency Directory)* or *(Source: SAMHSA Live Data)*
-Prioritize: walk-in > appointment, low-barrier > high-barrier, closest first.
+### Step 6: SUGGESTED QUESTIONS FOR CLIENT (### 🗣️ Suggested Questions for Client)
+Use the header: ### 🗣️ Suggested Questions for Client
+Based on evidence-based peer support practices (MI, trauma-informed care), recommend 2-3 specific questions the navigator should ask the CLIENT to build rapport, assess needs deeper, or support behavior change. Examples:
+- "On a scale of 1-10, how safe do you feel where you're sleeping tonight?"
+- "What would stable housing look like for you?"
+- "What's worked for you in the past when things got tough?"
+Tailor to the specific situation. Use motivational interviewing, strengths-based, and person-centered language.
+NOTE: Verified resources are shown automatically in the Resources panel — do NOT output a separate resources section. You may still reference agency names inline in your action steps.
 
 ### Step 7: OFFER SCREENINGS (only after stabilizing basics)
 Suggest relevant screenings with a 1-line reason:
@@ -1344,7 +1346,7 @@ Suggest relevant screenings with a 1-line reason:
 Do NOT suggest screenings during active crisis or before basic needs are addressed.
 
 ### Step 8: OFFER NOTE + EMAIL
-End with: "Want me to generate a **GIRP/BIRP note** and/or a **referral email** for any of these agencies?"
+End with: "Want me to generate a **clinical note** (GIRP, BIRP, DAP, or SOAP) and/or a **referral email** for any of these agencies?"
 
 ---
 
@@ -1814,8 +1816,8 @@ function detectResourceCategories(message, history) {
     return ["community services", "social services"];
   }
 
-  // Deduplicate and limit to 3 most relevant (budget-conscious: reduces search fan-out)
-  return [...new Set(matched)].slice(0, 3);
+  // Deduplicate and limit to 6 most relevant (covers all multi-need categories)
+  return [...new Set(matched)].slice(0, 6);
 }
 
 // ── FUTURE: NATIVE GROUNDING (Vertex AI Search + Gemini) ──
@@ -1914,7 +1916,7 @@ async function searchVertexAI(query, accessToken, location, history, deadline = 
       ? `zipcode: ANY(${nearbyZips.slice(0, 20).map(z => `"${z}"`).join(',')})`
       : `zipcode: ANY("${zipcode}")`;
 
-    for (const searchTerm of categories.slice(0, 3)) {
+    for (const searchTerm of categories.slice(0, 5)) {
       // Search with proximity zip filter
       searches.push(
         singleSearch(searchTerm, accessToken, zipFilter)
@@ -1933,7 +1935,7 @@ async function searchVertexAI(query, accessToken, location, history, deadline = 
 
   // --- Strategy 2: Borough-level filtered search ---
   if (borough) {
-    for (const searchTerm of categories.slice(0, 2)) {
+    for (const searchTerm of categories.slice(0, 3)) {
       searches.push(
         singleSearch(`${searchTerm} ${borough}`, accessToken, `borough: ANY("${borough}")`)
           .then(r => { console.log(`[SEARCH] borough ${borough} + "${searchTerm}": ${r.length} results`); return r; })
@@ -2237,20 +2239,20 @@ function buildResourceContext(searchResults, location, samhsaResults = []) {
       return 0;
     });
 
-    // Apply proximity-based filtering: 5-10mi primary, expand to 20mi if needed
+    // Apply proximity-based filtering: 5mi primary, 10mi secondary (NYC-appropriate)
     filteredResources = resources;
     if (targetZip) {
-      const within10 = resources.filter(r => r._distanceMiles !== undefined && r._distanceMiles <= 10);
-      if (within10.length >= 3) {
-        // Enough agencies within 10 miles — show only those
-        filteredResources = within10;
+      const within5 = resources.filter(r => r._distanceMiles !== undefined && r._distanceMiles <= 5);
+      if (within5.length >= 3) {
+        // Enough agencies within 5 miles — show only those (best for NYC density)
+        filteredResources = within5;
       } else {
-        // Expand to 20 miles
-        const within20 = resources.filter(r => r._distanceMiles !== undefined && r._distanceMiles <= 20);
-        if (within20.length > 0) {
-          filteredResources = within20;
+        // Expand to 10 miles
+        const within10 = resources.filter(r => r._distanceMiles !== undefined && r._distanceMiles <= 10);
+        if (within10.length >= 2) {
+          filteredResources = within10;
         }
-        // If still nothing within 20mi, show all results (with distance if available)
+        // If still few within 10mi, show all results with distance (no 20mi sprawl)
       }
     }
 
@@ -2985,7 +2987,8 @@ export default async function handler(req) {
       resources: structuredResources || [],
       sources: guidelineSnippets || [],
       barriers: barriers.length > 0 ? barriers : null,
-      multiNeeds: multiNeeds ? { count: multiNeeds.count, detected: multiNeeds.detected } : null
+      multiNeeds: multiNeeds ? { count: multiNeeds.count, detected: multiNeeds.detected } : null,
+      clientLocation: (location.zipcode || location.borough) ? { zipcode: location.zipcode, borough: location.borough } : null
     }), {
       status: 200,
       headers: H

@@ -1778,7 +1778,9 @@
         else if (/🟡/.test(firstLine)) cards.push({ type: 'triage-week', title: '### ' + firstLine, body });
         else if (/🟢/.test(firstLine)) cards.push({ type: 'triage-long', title: '### ' + firstLine, body });
         else if (/🔗/.test(firstLine)) cards.push({ type: 'barrier-buster', title: '### ' + firstLine, body });
-        else if (/📍/.test(firstLine)) cards.push({ type: 'resources', title: '### ' + firstLine, body });
+        else if (/📍/.test(firstLine)) { /* Resources shown in right panel — skip action card */ }
+        else if (/❓/.test(firstLine)) { /* Unblocker questions rendered in chat */ }
+        else if (/🗣/.test(firstLine)) { /* Suggested client questions rendered in chat */ }
         else if (/✅/.test(firstLine)) cards.push({ type: 'actions', title: '### ' + firstLine, body });
         else if (/💬/.test(firstLine)) cards.push({ type: 'say', title: '### ' + firstLine, body });
         else if (/🎯/.test(firstLine)) cards.push({ type: 'quick', title: '### ' + firstLine, body });
@@ -1877,13 +1879,18 @@
             <div class="generate-card">
               <button class="btn" onclick="sendMessage('Generate a GIRP note based on our conversation')">📋 GIRP Note</button>
               <button class="btn" onclick="sendMessage('Generate a BIRP note based on our conversation')">📋 BIRP Note</button>
+              <button class="btn" onclick="sendMessage('Generate a DAP note based on our conversation')">📋 DAP Note</button>
+              <button class="btn" onclick="sendMessage('Generate a SOAP note based on our conversation')">📋 SOAP Note</button>
               <button class="btn" onclick="sendMessage('write a referral email')">📧 Referral Email</button>
               <button class="btn" onclick="sendMessage('warm handoff script')">📞 Warm Handoff</button>
             </div>`;
         } else if (card.type === 'screening-suggest') {
           let sugHtml = '<div class="action-card-header screening-suggest">🔍 Recommended Screenings</div><div class="screening-suggest-body">';
           card.suggestions.forEach(s => {
-            sugHtml += `<button class="suggestion-btn" onclick="sendMessage('start ${escapeHtml(s.form)}')">${escapeHtml(s.form)}: ${escapeHtml(s.reason)}</button>`;
+            sugHtml += `<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <div style="flex:1;font-size:11px;color:var(--text);">${escapeHtml(s.form)}: <span style="color:var(--muted);">${escapeHtml(s.reason)}</span></div>
+              <button class="btn" style="font-size:11px;padding:4px 12px;background:var(--accent);color:white;border:none;border-radius:6px;font-weight:700;cursor:pointer;white-space:nowrap;" onclick="sendMessage('start ${escapeHtml(s.form)}')">▶ Start Screening</button>
+            </div>`;
           });
           sugHtml += '</div>';
           el.innerHTML = sugHtml;
@@ -1995,7 +2002,14 @@
         el.className = 'resource-card';
         let html = `<div class="resource-name">${escapeHtml(r.name || r.agency_name || 'Unknown')}</div>`;
         if (r.program || r.program_name) html += `<div class="resource-detail">${escapeHtml(r.program || r.program_name)}</div>`;
-        if (r.address) html += `<div class="resource-detail">📍 ${escapeHtml(r.address)}</div>`;
+        if (r.address) {
+          html += `<div class="resource-detail">📍 ${escapeHtml(r.address)}</div>`;
+          // Transit directions link
+          const clientZip = window._clientZip || '';
+          const origin = clientZip ? encodeURIComponent(clientZip + ', New York, NY') : encodeURIComponent('New York, NY');
+          const dest = encodeURIComponent(r.address);
+          html += `<div class="resource-detail"><a href="https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${dest}&travelmode=transit" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:11px;">🚇 Transit Directions (Trains/Buses)</a></div>`;
+        }
         if (r.phone || r.phone_number) html += `<div class="resource-detail">📞 ${escapeHtml(r.phone || r.phone_number)}</div>`;
         if (r.hours || r.operating_hours) html += `<div class="resource-detail">🕐 ${escapeHtml(r.hours || r.operating_hours)}</div>`;
         if (r.eligibility) html += `<div class="resource-detail">✓ ${escapeHtml(r.eligibility)}</div>`;
@@ -2214,6 +2228,15 @@
       if (result.suicidalIdeation || result.selfHarmFlag || result.acute) {
         html += `<div style="margin-top:8px;padding:6px 8px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;font-size:11px;font-weight:700;color:#991b1b;">⚠ SAFETY FLAG — Immediate Review Required</div>`;
       }
+
+      // Next Steps & Resources button
+      const formName = result.formName || 'screening';
+      const score = result.score || 0;
+      const severity = result.severity || '';
+      html += `<div style="margin-top:8px;display:flex;gap:6px;">
+        <button class="btn" style="flex:1;font-size:11px;padding:6px 12px;background:var(--accent);color:white;border:none;border-radius:6px;font-weight:700;cursor:pointer;" onclick="sendMessage('Based on the ${escapeHtml(formName)} score of ${score} (${escapeHtml(severity)}), what are the recommended next steps and which resources should I connect the client with?')">📋 Next Steps & Resources</button>
+      </div>`;
+
       html += '</div>';
       el.innerHTML = html;
       container.insertBefore(el, container.firstChild);
@@ -2361,6 +2384,10 @@
 
           // Update resource panel with structured resources — or clear stale data
           if (data.resources && data.resources.length > 0) {
+            // Store client zip for transit directions
+            if (data.clientLocation && data.clientLocation.zipcode) {
+              window._clientZip = data.clientLocation.zipcode;
+            }
             renderResourcePanel(data.resources, data.multiNeeds);
           } else {
             // Clear stale resources from previous response
@@ -2403,6 +2430,40 @@
             </div>`;
           }
 
+          // ── Extract unblocker questions from response (### ❓ section) ──
+          let unblockerHtml = '';
+          const unblockerMatch = responseText.match(/### ❓[^\n]*\n([\s\S]*?)(?=### |$)/);
+          if (unblockerMatch) {
+            const ubLines = unblockerMatch[1].split('\n')
+              .map(l => l.replace(/^[-•*\d.)\s]+/, '').trim())
+              .filter(l => l.length > 5 && !l.startsWith('---'));
+            if (ubLines.length > 0) {
+              unblockerHtml = `<div style="margin-top:8px;">
+                <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">❓ MORE INFO NEEDED</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  ${ubLines.slice(0, 3).map(q => `<button class="suggestion-btn" style="text-align:left;padding:5px 8px;font-size:11px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px;color:var(--accent);cursor:pointer;" onclick="document.getElementById('user-input').value=this.textContent;document.getElementById('user-input').focus();">${escapeHtml(q)}</button>`).join('')}
+                </div>
+              </div>`;
+            }
+          }
+
+          // ── Extract suggested questions for client (### 🗣️ section) ──
+          let suggestedQHtml = '';
+          const suggestedMatch = responseText.match(/### 🗣[^\n]*\n([\s\S]*?)(?=### |$)/);
+          if (suggestedMatch) {
+            const sqLines = suggestedMatch[1].split('\n')
+              .map(l => l.replace(/^[-•*\d.)\s]+/, '').replace(/^[""]/, '').replace(/[""]$/, '').trim())
+              .filter(l => l.length > 5 && !l.startsWith('---'));
+            if (sqLines.length > 0) {
+              suggestedQHtml = `<div style="margin-top:8px;">
+                <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">🗣️ SUGGESTED QUESTIONS FOR CLIENT</div>
+                <div style="display:flex;flex-direction:column;gap:4px;">
+                  ${sqLines.slice(0, 3).map(q => `<div style="padding:5px 8px;font-size:11px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;color:#166534;font-style:italic;">"${escapeHtml(q)}"</div>`).join('')}
+                </div>
+              </div>`;
+            }
+          }
+
           // Needs map chips in chat
           let needsMapHtml = '';
           if (data.needsMap && Object.keys(data.needsMap).length >= 2) {
@@ -2421,6 +2482,8 @@
           loadingMsg.innerHTML = `<div class="message-content">
             ${chatSafetyHtml}
             <p>${parseMarkdown(firstLine)}</p>
+            ${unblockerHtml}
+            ${suggestedQHtml}
             ${needsMapHtml}
             <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">
               📋 ${actionCardCount} action card${actionCardCount !== 1 ? 's' : ''} ready →
