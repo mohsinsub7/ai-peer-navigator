@@ -1455,6 +1455,31 @@
     .checklist-item.checked label { text-decoration: line-through; color: var(--muted); }
     .checklist-item input[type="checkbox"] { margin-right: 8px; accent-color: var(--accent); }
 
+    /* ── ICD-10 CHIPS ── */
+    .icd10-bar { display:flex;flex-wrap:wrap;gap:4px;margin-top:8px; }
+    .icd10-chip { display:inline-flex;align-items:center;gap:3px;background:#ede9fe;color:#5b21b6;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;border:1px solid #c4b5fd;cursor:help; }
+    .icd10-chip .icd-code { font-family:monospace;font-weight:700; }
+    .icd10-chip .icd-label { font-weight:400;color:#6b21a8; }
+
+    /* ── SAVE SESSION MODAL ── */
+    .save-modal { display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:110;align-items:center;justify-content:center; }
+    .save-modal-content { background:var(--card);border-radius:12px;box-shadow:var(--shadow-lg);width:520px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden; }
+    .save-modal-header { display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;font-size:15px; }
+    .save-modal-header button { background:none;border:none;font-size:18px;cursor:pointer;color:var(--muted); }
+    .save-modal-body { flex:1;overflow-y:auto;padding:16px; }
+    .save-choice-btn { display:block;width:100%;padding:14px 16px;margin-bottom:10px;border:2px solid var(--border);border-radius:10px;background:var(--card);cursor:pointer;text-align:left;transition:all 0.15s; }
+    .save-choice-btn:hover { border-color:var(--accent);background:var(--accent-light); }
+    .save-choice-btn h4 { margin:0 0 4px 0;font-size:14px;color:var(--text); }
+    .save-choice-btn p { margin:0;font-size:12px;color:var(--muted); }
+    .encounter-entry { padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;transition:all 0.15s;font-size:12px; }
+    .encounter-entry:hover { border-color:var(--accent);background:var(--accent-light); }
+    .encounter-entry .enc-date { font-weight:700;font-size:12px; }
+    .encounter-entry .enc-meta { color:var(--muted);font-size:11px;margin-top:2px; }
+    .patient-select-item { padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;transition:all 0.15s; }
+    .patient-select-item:hover { border-color:var(--accent);background:var(--accent-light); }
+    .patient-select-item .patient-name { font-weight:700;font-size:13px; }
+    .patient-select-item .patient-meta { font-size:11px;color:var(--muted);margin-top:2px; }
+
     /* ── SCROLLBAR ── */
     .messages::-webkit-scrollbar { width: 6px; }
     .messages::-webkit-scrollbar-track { background: transparent; }
@@ -1473,6 +1498,7 @@
       </div>
       <div class="flex-grow"></div>
       <button class="btn" onclick="showClientModal()" aria-label="View saved clients">📋 Clients</button>
+      <button class="btn" id="btn-save" aria-label="Save session to patient chart" style="background:#059669;color:#fff;">💾 Save Session</button>
       <button class="btn" id="btn-clear" aria-label="Clear conversation session">Clear Session</button>
       <a class="btn" href="index.html" aria-label="Return to home page">← Home</a>
     </div>
@@ -1565,14 +1591,25 @@
     </aside>
   </main>
 
-  <!-- Client Sessions Modal -->
+  <!-- Client Sessions Modal (EHR-style Patient Chart) -->
   <div class="client-modal" id="client-modal">
-    <div class="client-modal-content">
+    <div class="client-modal-content" style="width:580px;">
       <div class="client-modal-header">
-        <span>📋 Client Sessions</span>
+        <span>📋 Patient Charts</span>
         <button onclick="closeClientModal()" aria-label="Close">&times;</button>
       </div>
       <div id="client-list-items"></div>
+    </div>
+  </div>
+
+  <!-- Save Session Modal -->
+  <div class="save-modal" id="save-modal">
+    <div class="save-modal-content">
+      <div class="save-modal-header">
+        <span>💾 Save Session</span>
+        <button onclick="closeSaveModal()" aria-label="Close">&times;</button>
+      </div>
+      <div class="save-modal-body" id="save-modal-body"></div>
     </div>
   </div>
 
@@ -1581,6 +1618,7 @@
     const userInput = document.getElementById('user-input');
     const sendBtn = document.getElementById('send-btn');
     const clearBtn = document.getElementById('btn-clear');
+    const saveBtn = document.getElementById('btn-save');
     const tags = document.querySelectorAll('.tag');
     const noteActionBtns = document.querySelectorAll('.note-action-btn');
     const sessionInfo = document.getElementById('session-info');
@@ -1636,6 +1674,192 @@
       sessionStorage.removeItem('ai_peer_session_ts');
     }
 
+    // ── ICD-10 CODE DETECTION (Behavioral Health & SDoH) ──
+    const ICD10_MAP = [
+      // Major Depressive Disorders
+      { code: 'F32.0', label: 'MDD, single episode, mild', patterns: /\b(mild depression|feeling down|low mood|sad lately)\b/i },
+      { code: 'F32.1', label: 'MDD, single episode, moderate', patterns: /\b(moderate depression|really depressed|can\'?t function|struggling with depression)\b/i },
+      { code: 'F32.2', label: 'MDD, single episode, severe', patterns: /\b(severe depression|deeply depressed|can\'?t get out of bed|want to die)\b/i },
+      { code: 'F32.9', label: 'MDD, single episode, unspecified', patterns: /\b(depressed|depression|depressive)\b/i },
+      { code: 'F33.0', label: 'MDD, recurrent, mild', patterns: /\b(depression.{0,20}(came back|returned|again|recurring))\b/i },
+      // Anxiety Disorders
+      { code: 'F41.1', label: 'Generalized anxiety disorder', patterns: /\b(gad|generalized anxiety|constant worry|anxious all the time|can\'?t stop worrying)\b/i },
+      { code: 'F41.0', label: 'Panic disorder', patterns: /\b(panic attack|panic disorder|heart racing|can\'?t breathe.{0,15}(anxiety|panic|scared))\b/i },
+      { code: 'F41.9', label: 'Anxiety disorder, unspecified', patterns: /\b(anxiety|anxious|worried|nervous|on edge)\b/i },
+      { code: 'F40.10', label: 'Social anxiety disorder', patterns: /\b(social anxiety|afraid.{0,10}people|avoid.{0,10}social|social phobia)\b/i },
+      // PTSD & Trauma
+      { code: 'F43.10', label: 'PTSD, unspecified', patterns: /\b(ptsd|post.?traumatic|trauma|flashback|nightmare.{0,10}(trauma|event|attack|war))\b/i },
+      { code: 'F43.12', label: 'PTSD, chronic', patterns: /\b(chronic ptsd|ptsd.{0,15}years|long.?term trauma)\b/i },
+      { code: 'F43.20', label: 'Adjustment disorder, unspecified', patterns: /\b(adjustment disorder|adjusting.{0,15}(loss|change|move|divorce))\b/i },
+      // Alcohol Use Disorders
+      { code: 'F10.10', label: 'Alcohol use disorder, mild', patterns: /\b(social drink|drink.{0,15}(too much|a lot|daily|every day)|binge drink|problem.{0,10}drink)\b/i },
+      { code: 'F10.20', label: 'Alcohol use disorder, moderate', patterns: /\b(alcohol.{0,10}(depend|abuse|problem|use disorder)|heavy drink|alcoholi[cs]|can\'?t stop drink)\b/i },
+      { code: 'F10.21', label: 'Alcohol dependence, in remission', patterns: /\b(sober.{0,15}(alcohol|drink)|alcohol.{0,10}recovery|quit.{0,10}drink|clean.{0,10}(alcohol|drink))\b/i },
+      { code: 'F10.929', label: 'Alcohol use, unspecified w/ intoxication', patterns: /\b(drunk|intoxicat|blackout.{0,10}drink|blacked out)\b/i },
+      // Opioid Use Disorders
+      { code: 'F11.10', label: 'Opioid use disorder, mild', patterns: /\b(pill.{0,10}(habit|problem)|pain pill.{0,10}(addict|depend|hooked))\b/i },
+      { code: 'F11.20', label: 'Opioid use disorder, moderate', patterns: /\b(opioid.{0,10}(depend|abuse|use disorder)|heroin|fentanyl|oxy.{0,5}(addict|depend|abuse)|methadone|suboxone|buprenorphine)\b/i },
+      { code: 'F11.21', label: 'Opioid dependence, in remission', patterns: /\b(opioid.{0,10}recovery|clean.{0,10}(opioid|heroin|fentanyl)|MAT|medic.{0,10}assist.{0,10}treat)\b/i },
+      // Cannabis Use Disorders
+      { code: 'F12.10', label: 'Cannabis use disorder, mild', patterns: /\b(smoke.{0,10}(weed|pot|marijuana)|cannabis.{0,10}(use|daily)|marijuana.{0,10}(daily|problem))\b/i },
+      { code: 'F12.20', label: 'Cannabis use disorder, moderate', patterns: /\b(cannabis.{0,10}(depend|abuse|disorder)|marijuana.{0,10}(depend|abuse|disorder)|addicted.{0,10}(weed|pot|marijuana))\b/i },
+      // Cocaine Use Disorders
+      { code: 'F14.10', label: 'Cocaine use disorder, mild', patterns: /\b(cocaine|crack|coke).{0,15}(use|tried|occasional)/i },
+      { code: 'F14.20', label: 'Cocaine use disorder, moderate', patterns: /\b(cocaine|crack|coke).{0,10}(depend|abuse|disorder|addict|habit)/i },
+      // Other Stimulant Use Disorders
+      { code: 'F15.20', label: 'Stimulant use disorder, moderate', patterns: /\b(meth|methamphetamine|amphetamine|crystal|speed|tina).{0,10}(use|depend|abuse|addict)/i },
+      // Multi-substance / Unspecified
+      { code: 'F19.20', label: 'Other psychoactive substance dependence', patterns: /\b(poly.?substance|multiple.{0,10}(drug|substance)|using.{0,10}everything)\b/i },
+      // Nicotine
+      { code: 'F17.210', label: 'Nicotine dependence, cigarettes', patterns: /\b(smok(e|ing|er)|cigarette|tobacco|nicotine|vap(e|ing))\b/i },
+      // Suicidal Ideation
+      { code: 'R45.851', label: 'Suicidal ideations', patterns: /\b(suicid|kill.{0,5}(myself|self)|end.{0,5}(my life|it all)|want to die|don\'?t want to.{0,5}(live|be here|wake up))\b/i },
+      // Self-Harm
+      { code: 'T14.91', label: 'Suicide attempt', patterns: /\b(attempt|tried to.{0,10}(kill|end|hurt).{0,5}(myself|self)|overdos|OD\'?d)\b/i },
+      // Insomnia
+      { code: 'G47.00', label: 'Insomnia, unspecified', patterns: /\b(insomnia|can\'?t sleep|not sleeping|sleep.{0,10}(problem|trouble|difficult)|up all night)\b/i },
+      // Bipolar
+      { code: 'F31.9', label: 'Bipolar disorder, unspecified', patterns: /\b(bipolar|manic|mania|mood swing)\b/i },
+      // Schizophrenia spectrum
+      { code: 'F20.9', label: 'Schizophrenia, unspecified', patterns: /\b(schizophren|psycho(sis|tic)|hear.{0,10}voice|hallucin|paranoi[ad])\b/i },
+      // Eating Disorders (if mentioned)
+      { code: 'F50.9', label: 'Eating disorder, unspecified', patterns: /\b(eating disorder|anorexi|bulimi|binge eat|purging)\b/i },
+      // ── SOCIAL DETERMINANTS OF HEALTH (Z-Codes) ──
+      { code: 'Z59.00', label: 'Homelessness, unspecified', patterns: /\b(homeless|unhoused|no.{0,5}(home|place to stay|shelter)|on the street|living outside|sleeping rough)\b/i },
+      { code: 'Z59.10', label: 'Inadequate housing', patterns: /\b(inadequate.{0,5}hous|substandard|overcrowd|no heat|no water|condemned|uninhabitable)\b/i },
+      { code: 'Z59.811', label: 'Housing instability / risk of homelessness', patterns: /\b(evict|about to lose.{0,10}(home|apartment|house)|behind on rent|facing.{0,10}(evict|homeless)|housing instab)\b/i },
+      { code: 'Z59.41', label: 'Food insecurity', patterns: /\b(food insecur|hungry|no food|can\'?t (afford|buy).{0,10}food|skip.{0,10}meal|food bank|food pantry|snap benefit)\b/i },
+      { code: 'Z56.0', label: 'Unemployment, unspecified', patterns: /\b(unemploy|job.?less|no.{0,5}(job|work|income)|lost.{0,10}(job|work)|fired|laid off|looking for.{0,10}(work|job))\b/i },
+      { code: 'Z59.70', label: 'Insufficient social insurance/welfare', patterns: /\b(no.{0,5}(insurance|medicaid|benefits)|lost.{0,10}(benefits|insurance|medicaid)|need.{0,10}(medicaid|benefits|SSI|SSDI))\b/i },
+      { code: 'Z60.2', label: 'Problems related to living alone', patterns: /\b(live.{0,5}alone|isolated|no.{0,5}(family|support|friends)|social.{0,5}isol|lonely|loneliness)\b/i },
+      { code: 'Z63.0', label: 'Problems in relationship with spouse/partner', patterns: /\b(relationship.{0,10}(problem|issue|trouble)|partner.{0,10}(fight|conflict|argue)|marriage.{0,10}(problem|trouble|falling apart))\b/i },
+      { code: 'Z62.810', label: 'Personal history of physical abuse in childhood', patterns: /\b(child.{0,10}(abuse|neglect|beaten)|foster care|ACE.{0,5}score|adverse childhood)\b/i },
+      { code: 'Z62.811', label: 'Personal history of psychological abuse in childhood', patterns: /\b(emotional.{0,10}(abuse|neglect).{0,10}child|verbal.{0,10}abuse.{0,10}(growing|child))\b/i },
+      { code: 'Z65.1', label: 'Imprisonment and other incarceration', patterns: /\b(incarcerat|prison|jail|locked up|parole|probation|reentry|re.?entry|formerly incarcerat)\b/i },
+      { code: 'Z63.4', label: 'Disappearance/death of family member', patterns: /\b(grief|grieving|lost.{0,15}(mother|father|parent|child|son|daughter|sibling|brother|sister|spouse|wife|husband|partner)|someone.{0,5}died|death.{0,10}(family|loved one|close)|bereave)\b/i },
+      { code: 'Z55.9', label: 'Problems related to education/literacy', patterns: /\b(can\'?t read|illiterat|no.{0,5}(diploma|GED|education)|drop.{0,5}out|didn\'?t finish.{0,10}school)\b/i },
+      { code: 'Z91.89', label: 'Other specified personal risk factors', patterns: /\b(non.?compli|not tak.{0,10}medic|stopp.{0,10}(medic|treatment)|refuse.{0,10}(help|treatment|service))\b/i },
+      // DV/IPV
+      { code: 'T76.11', label: 'Adult physical abuse, suspected', patterns: /\b(domestic violence|DV|IPV|intimate partner|partner.{0,10}(hit|hurt|beat|abuse)|being (hit|beat|hurt))\b/i },
+      { code: 'Z91.410', label: 'Personal history of adult physical abuse', patterns: /\b(history.{0,15}(abuse|DV|domestic violence)|survivor.{0,10}(abuse|DV|violence)|past.{0,10}(abuse|DV))\b/i },
+      // Pregnancy / Perinatal
+      { code: 'O99.340', label: 'Perinatal mental health conditions', patterns: /\b(postpartum|perinatal|prenatal.{0,10}(depress|anxiety)|baby blues|bonding.{0,10}(difficult|problem))\b/i },
+    ];
+
+    function detectICD10Codes(text) {
+      if (!text) return [];
+      const lower = text.toLowerCase();
+      const found = [];
+      const usedCodes = new Set();
+      for (const entry of ICD10_MAP) {
+        if (entry.patterns.test(lower) && !usedCodes.has(entry.code)) {
+          // For unspecified codes, only add if no more specific code in same category
+          const prefix = entry.code.substring(0, 3);
+          const hasMoreSpecific = found.some(f => f.code.startsWith(prefix) && f.code.length > entry.code.length);
+          if (!hasMoreSpecific) {
+            // Remove less specific code if we have more specific
+            const lessSpecificIdx = found.findIndex(f => f.code.startsWith(prefix) && f.code.length < entry.code.length);
+            if (lessSpecificIdx >= 0) found.splice(lessSpecificIdx, 1);
+            found.push({ code: entry.code, label: entry.label });
+            usedCodes.add(entry.code);
+          }
+        }
+      }
+      return found;
+    }
+
+    function renderICD10Chips(codes) {
+      if (!codes || codes.length === 0) return '';
+      return `<div style="margin-top:8px;">
+        <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">🏥 IDENTIFIED ICD-10 CODES <span style="font-weight:400;font-style:italic;">(system-detected, not a diagnosis)</span></div>
+        <div class="icd10-bar">${codes.map(c => `<span class="icd10-chip" title="${escapeHtml(c.label)}"><span class="icd-code">${c.code}</span> <span class="icd-label">${escapeHtml(c.label)}</span></span>`).join('')}</div>
+      </div>`;
+    }
+
+    // ── COMPACT RESPONSE RENDERER (for session restore + client open) ──
+    function renderCompactResponse(text) {
+      if (!text) return '<div class="message-content"><em>No response data</em></div>';
+
+      // Check if it's a note (SOAP/DAP/GIRP/BIRP)
+      if (/^\*\*[BSDG] - (Behavior|Subjective|Data|Goal)/.test(text)) {
+        return `<div class="message-content note-output"><div class="note-header"><span>📋 Clinical Note</span><button class="copy-btn" onclick="copyNote(this)">Copy</button></div><div class="note-body">${escapeHtml(text)}</div></div>`;
+      }
+
+      // Check if it's a screening result
+      if (/screening complete|score:|total score/i.test(text) && text.length < 500) {
+        return `<div class="message-content">${parseMarkdown(text)}</div>`;
+      }
+
+      // Extract sections for compact rendering
+      const lines = text.split('\\n');
+      const firstLine = lines.find(l => l.trim() && !l.startsWith('###') && !l.startsWith('---')) || '';
+
+      let html = '';
+
+      // Empathy line
+      if (firstLine.trim()) {
+        html += `<div style="margin-bottom:8px;">
+          <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">💬 RECOMMENDED RESPONSE TO CLIENT</div>
+          <div style="padding:8px 12px;font-size:13px;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;color:#166534;font-style:italic;line-height:1.5;">${escapeHtml(firstLine)}</div>
+        </div>`;
+      }
+
+      // What to Say
+      const sayMatch = text.match(/### 💬[^\\n]*\\n([\\s\\S]*?)(?=### |$)/);
+      if (sayMatch) {
+        const sayLines = sayMatch[1].split('\\n').map(l => l.replace(/^[-•*\\d.)\\s]+/, '').trim()).filter(l => l.length > 5 && !l.startsWith('---'));
+        if (sayLines.length > 0) {
+          html += `<div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">💬 WHAT TO SAY TO CLIENT</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              ${sayLines.slice(0, 5).map(l => `<div style="padding:6px 10px;font-size:12px;background:#d1fae5;border:1px solid #6ee7b7;border-radius:8px;color:#065f46;line-height:1.5;font-style:italic;">"${escapeHtml(l)}"</div>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
+      // Unblocker questions
+      const ubMatch = text.match(/### ❓[^\\n]*\\n([\\s\\S]*?)(?=### |$)/);
+      if (ubMatch) {
+        const ubLines = ubMatch[1].split('\\n').map(l => l.replace(/^[-•*\\d.)\\s]+/, '').trim()).filter(l => l.length > 5 && !l.startsWith('---'));
+        if (ubLines.length > 0) {
+          html += `<div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">❓ ASK THE CLIENT</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              ${ubLines.slice(0, 3).map(q => `<div style="padding:5px 8px;font-size:11px;background:#f0f9ff;border:1px solid #bfdbfe;border-radius:6px;color:#1e40af;">${escapeHtml(q)}</div>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
+      // Suggested questions
+      const sqMatch = text.match(/### 🗣[^\\n]*\\n([\\s\\S]*?)(?=### |$)/);
+      if (sqMatch) {
+        const sqLines = sqMatch[1].split('\\n').map(l => l.replace(/^[-•*\\d.)\\s]+/, '').replace(/^[""]/, '').replace(/[""]$/, '').trim()).filter(l => l.length > 5 && !l.startsWith('---'));
+        if (sqLines.length > 0) {
+          html += `<div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">🗣️ SUGGESTED QUESTIONS</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              ${sqLines.slice(0, 3).map(q => `<div style="padding:5px 8px;font-size:11px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;color:#166534;font-style:italic;">"${escapeHtml(q)}"</div>`).join('')}
+            </div>
+          </div>`;
+        }
+      }
+
+      // Count sections as action card summary
+      const sectionCount = (text.match(/^### /gm) || []).length;
+      if (sectionCount > 0) {
+        html += `<div style="margin-top:8px;font-size:11px;color:var(--muted);font-style:italic;">📋 ${sectionCount} action sections were generated in this response</div>`;
+      }
+
+      if (!html) {
+        // Fallback: just show plain text truncated
+        html = `<div style="font-size:13px;line-height:1.5;">${escapeHtml(text.substring(0, 300))}${text.length > 300 ? '…' : ''}</div>`;
+      }
+
+      return `<div class="message-content">${html}</div>`;
+    }
+
     function restoreSession(sessionData) {
       conversationHistory = sessionData.history || [];
       // Rebuild the chat UI from history
@@ -1653,12 +1877,7 @@
           msg.innerHTML = `<div class="message-content">${escapeHtml(turn.text)}</div>`;
         } else {
           msg.className = 'message assistant';
-          // Check if it looks like a note
-          if (turn.text.startsWith('**B - Behavior') || turn.text.startsWith('**S - Subjective') || turn.text.startsWith('**D - Data') || turn.text.startsWith('**G - Goal')) {
-            msg.innerHTML = `<div class="message-content note-output"><div class="note-header"><span>📋 Clinical Note (Restored)</span><button class="copy-btn" onclick="copyNote(this)">Copy</button></div><div class="note-body">${escapeHtml(turn.text)}</div></div>`;
-          } else {
-            msg.innerHTML = `<div class="message-content">${parseMarkdown(turn.text)}</div>`;
-          }
+          msg.innerHTML = renderCompactResponse(turn.text || '');
         }
         messagesDiv.appendChild(msg);
       }
@@ -2262,15 +2481,20 @@
       if (/domestic violence|ipv|dv|safe horizon/.test(allText)) needs.push('DV/Safety');
       if (/legal|court|probation/.test(allText)) needs.push('Legal');
 
-      clients[id] = {
-        id,
-        name: clientName,
-        created: Date.now(),
-        lastSession: Date.now(),
+      // Detect ICD-10 codes
+      const icdCodes = detectICD10Codes(allText);
+
+      // Build encounter
+      const encounter = {
+        encId: 'enc_' + Date.now(),
+        date: Date.now(),
         riskTier: _lastRiskTier || 'GREEN',
         needs,
         barriers: _lastBarriers || [],
+        icdCodes,
         history: conversationHistory,
+        msgCount: conversationHistory.filter(h => h.role === 'user').length,
+        screenings: extractScreeningsFromHistory(),
         checklist: [
           { text: 'Confirm contact made — Call client to confirm they reached the agency', done: false },
           { text: 'Verify appointment — Was intake scheduled? Date: ___', done: false },
@@ -2280,8 +2504,88 @@
         ]
       };
 
+      clients[id] = {
+        id,
+        name: clientName,
+        created: Date.now(),
+        lastSession: Date.now(),
+        riskTier: _lastRiskTier || 'GREEN',
+        needs,
+        barriers: _lastBarriers || [],
+        history: conversationHistory, // legacy compat
+        encounters: [encounter],
+        checklist: encounter.checklist
+      };
+
       saveClientsData(clients);
       return id;
+    }
+
+    // Save to EXISTING patient as a new encounter
+    function saveEncounterToPatient(patientId) {
+      const clients = loadClients();
+      const patient = clients[patientId];
+      if (!patient) return;
+
+      const allText = conversationHistory.map(h => h.text || '').join(' ').toLowerCase();
+      const needs = [];
+      if (/hous|shelter|evict|homeless/.test(allText)) needs.push('Housing');
+      if (/food|hungry|pantry|snap|meals/.test(allText)) needs.push('Food');
+      if (/substance|drug|alcohol|drink|heroin|fentanyl|recovery/.test(allText)) needs.push('SUD');
+      if (/depress|anxiety|mental health|suicid|therapy/.test(allText)) needs.push('Mental Health');
+      if (/employ|job|work|career/.test(allText)) needs.push('Employment');
+      if (/medicaid|benefits|insurance|ssi/.test(allText)) needs.push('Benefits');
+      if (/domestic violence|ipv|dv|safe horizon/.test(allText)) needs.push('DV/Safety');
+      if (/legal|court|probation/.test(allText)) needs.push('Legal');
+
+      const icdCodes = detectICD10Codes(allText);
+
+      const encounter = {
+        encId: 'enc_' + Date.now(),
+        date: Date.now(),
+        riskTier: _lastRiskTier || 'GREEN',
+        needs,
+        barriers: _lastBarriers || [],
+        icdCodes,
+        history: conversationHistory,
+        msgCount: conversationHistory.filter(h => h.role === 'user').length,
+        screenings: extractScreeningsFromHistory(),
+        checklist: [
+          { text: 'Confirm contact made — Call client to confirm they reached the agency', done: false },
+          { text: 'Verify appointment — Was intake scheduled? Date: ___', done: false },
+          { text: 'Check for barriers — Transportation, ID, eligibility, wait list issues', done: false },
+          { text: 'Document outcome — Update chart with referral status (connected/pending/declined)', done: false },
+          { text: 'Schedule next session — Set date for next peer session: ___', done: false },
+        ]
+      };
+
+      if (!patient.encounters) patient.encounters = [];
+      patient.encounters.push(encounter);
+      patient.lastSession = Date.now();
+      patient.riskTier = encounter.riskTier;
+      patient.history = conversationHistory; // legacy compat
+      // Merge needs
+      const allNeeds = new Set([...(patient.needs || []), ...needs]);
+      patient.needs = [...allNeeds];
+      patient.barriers = encounter.barriers;
+      patient.checklist = encounter.checklist;
+
+      saveClientsData(clients);
+    }
+
+    // Extract screening results from conversation history
+    function extractScreeningsFromHistory() {
+      const screenings = [];
+      const allText = conversationHistory.map(h => h.text || '').join(' ');
+      const screenMatch = allText.match(/(PHQ-4|PHQ-9|GAD-7|PC-PTSD-5|PCL-5|AUDIT|DAST-10|CAGE-AID|ASQ|CRAFFT|EPDS|WHO ASSIST)[:\s]*.*?(?:score|total)[:\s]*(\d+)/gi);
+      if (screenMatch) {
+        screenMatch.forEach(m => {
+          const parts = m.match(/(PHQ-4|PHQ-9|GAD-7|PC-PTSD-5|PCL-5|AUDIT|DAST-10|CAGE-AID|ASQ|CRAFFT|EPDS|WHO ASSIST)/i);
+          const score = m.match(/(\d+)\s*$/);
+          if (parts && score) screenings.push({ instrument: parts[1].toUpperCase(), score: parseInt(score[1]) });
+        });
+      }
+      return screenings;
     }
 
     function renderClientModal() {
@@ -2290,31 +2594,203 @@
       const entries = Object.values(clients).sort((a, b) => b.lastSession - a.lastSession);
 
       if (entries.length === 0) {
-        list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">No saved clients yet.<br>Sessions are saved when you clear a session.</div>';
+        list.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted);font-size:13px;">No patient charts yet.<br>Use <strong>💾 Save Session</strong> to create a patient chart.</div>';
         return;
       }
 
       list.innerHTML = entries.map(c => {
         const date = new Date(c.lastSession).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         const riskClass = (c.riskTier || 'GREEN').toLowerCase();
+        const encCount = (c.encounters || []).length || 1;
         const msgCount = (c.history || []).filter(h => h.role === 'user').length;
         const checkDone = (c.checklist || []).filter(cl => cl.done).length;
         const checkTotal = (c.checklist || []).length;
         const needsHtml = (c.needs || []).map(n => `<span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600;">${escapeHtml(n)}</span>`).join(' ');
 
-        return `<div class="client-entry" onclick="openClient('${c.id}')">
+        // ICD codes from latest encounter
+        const latestEnc = (c.encounters || []).slice(-1)[0];
+        const icdHtml = (latestEnc && latestEnc.icdCodes || []).slice(0, 4).map(ic => `<span style="background:#ede9fe;color:#5b21b6;padding:1px 5px;border-radius:3px;font-size:9px;font-family:monospace;font-weight:600;">${ic.code}</span>`).join(' ');
+
+        return `<div class="client-entry" onclick="showPatientChart('${c.id}')">
           <div style="display:flex;justify-content:space-between;align-items:center;">
             <div style="font-weight:700;font-size:13px;">${escapeHtml(c.name)}</div>
             <div style="display:flex;gap:6px;align-items:center;">
               <span class="risk-tier-badge ${riskClass}" style="display:inline-block;font-size:9px;padding:1px 6px;">${c.riskTier || 'GREEN'}</span>
-              <button onclick="event.stopPropagation();deleteClient('${c.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;" title="Delete">\u2715</button>
+              <span style="background:#f1f5f9;color:var(--muted);padding:1px 5px;border-radius:3px;font-size:9px;">${encCount} encounter${encCount !== 1 ? 's' : ''}</span>
+              <button onclick="event.stopPropagation();deleteClient('${c.id}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:12px;" title="Delete">✕</button>
             </div>
           </div>
-          <div style="font-size:11px;color:var(--muted);margin-top:2px;">${date} \u2022 ${msgCount} messages</div>
-          <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${needsHtml}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:4px;">\u2611 Follow-up: ${checkDone}/${checkTotal} complete</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">${date} • ${msgCount} messages</div>
+          <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px;">${needsHtml} ${icdHtml}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">☑ Follow-up: ${checkDone}/${checkTotal} complete</div>
         </div>`;
       }).join('');
+    }
+
+    // ── EHR-STYLE PATIENT CHART VIEW ──
+    function showPatientChart(clientId) {
+      const clients = loadClients();
+      const client = clients[clientId];
+      if (!client) return;
+
+      const list = document.getElementById('client-list-items');
+      const encounters = client.encounters || [];
+      const allText = (client.history || []).map(h => h.text || '').join(' ');
+      const allICD = encounters.length > 0 ? encounters.flatMap(e => e.icdCodes || []) : detectICD10Codes(allText);
+
+      // De-dup ICD codes
+      const icdMap = new Map();
+      allICD.forEach(c => { if (!icdMap.has(c.code)) icdMap.set(c.code, c); });
+      const uniqueICD = [...icdMap.values()];
+
+      // All screenings across encounters
+      const allScreenings = encounters.flatMap(e => e.screenings || []);
+
+      // All needs
+      const allNeeds = [...new Set(encounters.flatMap(e => e.needs || []).concat(client.needs || []))];
+
+      let chartHtml = `
+        <div style="padding:12px;">
+          <button onclick="renderClientModal()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;margin-bottom:8px;">← Back to patient list</button>
+          <h3 style="margin:0 0 12px 0;font-size:16px;">📋 ${escapeHtml(client.name)} — Patient Chart</h3>
+
+          <!-- Demographics & Risk -->
+          <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+            <span class="risk-tier-badge ${(client.riskTier || 'GREEN').toLowerCase()}" style="display:inline-block;font-size:10px;padding:2px 8px;">${client.riskTier || 'GREEN'}</span>
+            ${allNeeds.map(n => `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">${escapeHtml(n)}</span>`).join('')}
+          </div>
+
+          <!-- ICD-10 Codes Section -->
+          ${uniqueICD.length > 0 ? `
+            <div style="background:#faf5ff;border:1px solid #c4b5fd;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+              <div style="font-size:11px;font-weight:700;color:#5b21b6;margin-bottom:6px;">🏥 ICD-10 Codes</div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                ${uniqueICD.map(c => `<span class="icd10-chip" title="${escapeHtml(c.label)}"><span class="icd-code">${c.code}</span> <span class="icd-label">${escapeHtml(c.label)}</span></span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Screening History -->
+          ${allScreenings.length > 0 ? `
+            <div style="background:#f0f9ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:12px;">
+              <div style="font-size:11px;font-weight:700;color:#1e40af;margin-bottom:6px;">📊 Screening History</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${allScreenings.map(s => `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">${s.instrument}: ${s.score}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- Encounters -->
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;">📁 Encounters (${encounters.length || 1})</div>
+      `;
+
+      if (encounters.length > 0) {
+        chartHtml += encounters.slice().reverse().map((enc, idx) => {
+          const encDate = new Date(enc.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+          const encTime = new Date(enc.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+          const encRiskClass = (enc.riskTier || 'GREEN').toLowerCase();
+          const encNeeds = (enc.needs || []).join(', ');
+          const encICD = (enc.icdCodes || []).map(c => c.code).join(', ');
+          const encScreenings = (enc.screenings || []).map(s => `${s.instrument}:${s.score}`).join(', ');
+          const realIdx = encounters.length - 1 - idx;
+
+          return `<div class="encounter-entry" onclick="openEncounter('${clientId}', ${realIdx})">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span class="enc-date">${encDate} at ${encTime}</span>
+              <span class="risk-tier-badge ${encRiskClass}" style="display:inline-block;font-size:9px;padding:1px 5px;">${enc.riskTier || 'GREEN'}</span>
+            </div>
+            <div class="enc-meta">${enc.msgCount || 0} messages${encNeeds ? ' • ' + encNeeds : ''}${encICD ? ' • ICD: ' + encICD : ''}${encScreenings ? ' • ' + encScreenings : ''}</div>
+          </div>`;
+        }).join('');
+      } else {
+        // Legacy: single session, no encounters array
+        chartHtml += `<div class="encounter-entry" onclick="openClient('${clientId}')">
+          <div class="enc-date">${new Date(client.lastSession).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</div>
+          <div class="enc-meta">${(client.history || []).filter(h => h.role === 'user').length} messages (legacy session)</div>
+        </div>`;
+      }
+
+      chartHtml += `
+          <div style="margin-top:12px;">
+            <button class="btn" style="width:100%;background:var(--accent);color:#fff;font-size:12px;" onclick="openClient('${clientId}')">▶ Open Latest Session</button>
+          </div>
+        </div>`;
+
+      list.innerHTML = chartHtml;
+    }
+
+    // Open a specific encounter
+    function openEncounter(clientId, encounterIndex) {
+      const clients = loadClients();
+      const client = clients[clientId];
+      if (!client || !client.encounters || !client.encounters[encounterIndex]) return;
+
+      const enc = client.encounters[encounterIndex];
+      document.getElementById('client-modal').style.display = 'none';
+
+      conversationHistory = enc.history || [];
+      _lastRiskTier = enc.riskTier;
+      _lastBarriers = enc.barriers || [];
+
+      messagesDiv.innerHTML = '';
+      const encDate = new Date(enc.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      const welcome = document.createElement('div');
+      welcome.className = 'message assistant';
+      welcome.innerHTML = `<div class="message-content"><strong>Encounter from ${encDate} for ${escapeHtml(client.name)}</strong> — ${enc.msgCount || 0} messages. You can continue this conversation.</div>`;
+      messagesDiv.appendChild(welcome);
+
+      for (const turn of conversationHistory) {
+        const msg = document.createElement('div');
+        if (turn.role === 'user') {
+          msg.className = 'message user';
+          msg.innerHTML = `<div class="message-content">${escapeHtml(turn.text)}</div>`;
+        } else {
+          msg.className = 'message assistant';
+          msg.innerHTML = renderCompactResponse(turn.text || '');
+        }
+        messagesDiv.appendChild(msg);
+      }
+
+      // ICD-10 codes
+      if (enc.icdCodes && enc.icdCodes.length > 0) {
+        const icdMsg = document.createElement('div');
+        icdMsg.className = 'message assistant';
+        icdMsg.innerHTML = `<div class="message-content" style="background:#faf5ff;border-color:#c4b5fd;">${renderICD10Chips(enc.icdCodes)}</div>`;
+        messagesDiv.appendChild(icdMsg);
+      }
+
+      // Checklist
+      if (enc.checklist && enc.checklist.length > 0) {
+        const checkMsg = document.createElement('div');
+        checkMsg.className = 'message assistant';
+        let checkHtml = '<div class="message-content" style="background:#fffbeb;border-color:#fbbf24;"><strong>📋 Follow-Up Checklist</strong><ul class="checklist" style="margin-top:8px;">';
+        enc.checklist.forEach((item, idx) => {
+          const checkedAttr = item.done ? 'checked' : '';
+          const checkedClass = item.done ? 'checked' : '';
+          checkHtml += `<li class="checklist-item ${checkedClass}"><label><input type="checkbox" ${checkedAttr} onchange="updateEncounterChecklist('${clientId}', ${encounterIndex}, ${idx}, this.checked)"> ${escapeHtml(item.text)}</label></li>`;
+        });
+        checkHtml += '</ul></div>';
+        checkMsg.innerHTML = checkHtml;
+        messagesDiv.appendChild(checkMsg);
+      }
+
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      updateRiskTierBadge(_lastRiskTier);
+      renderBarrierChips(_lastBarriers);
+      window._activePatientId = clientId;
+      saveSession();
+      updateSessionInfo();
+    }
+
+    function updateEncounterChecklist(clientId, encIndex, itemIndex, checked) {
+      const clients = loadClients();
+      const enc = clients[clientId]?.encounters?.[encIndex];
+      if (enc && enc.checklist[itemIndex] !== undefined) {
+        enc.checklist[itemIndex].done = checked;
+        saveClientsData(clients);
+        const item = event.target.closest('.checklist-item');
+        if (item) item.classList.toggle('checked', checked);
+      }
     }
 
     function openClient(clientId) {
@@ -2325,16 +2801,19 @@
       // Close modal
       document.getElementById('client-modal').style.display = 'none';
 
-      // Load client session
-      conversationHistory = client.history || [];
-      _lastRiskTier = client.riskTier;
-      _lastBarriers = client.barriers || [];
+      // Load client session — use latest encounter if EHR-style, else legacy
+      const encounters = client.encounters || [];
+      const latestEnc = encounters.length > 0 ? encounters[encounters.length - 1] : null;
+      conversationHistory = latestEnc ? (latestEnc.history || []) : (client.history || []);
+      _lastRiskTier = latestEnc ? latestEnc.riskTier : (client.riskTier || 'GREEN');
+      _lastBarriers = latestEnc ? (latestEnc.barriers || []) : (client.barriers || []);
 
-      // Rebuild chat from history
+      // Rebuild chat from history using compact rendering
       messagesDiv.innerHTML = '';
+      const encCount = encounters.length || 1;
       const welcome = document.createElement('div');
       welcome.className = 'message assistant';
-      welcome.innerHTML = `<div class="message-content"><strong>Session loaded for ${escapeHtml(client.name)}</strong> \u2014 ${conversationHistory.filter(h => h.role === 'user').length} previous messages. You can continue the conversation.</div>`;
+      welcome.innerHTML = `<div class="message-content"><strong>Session loaded for ${escapeHtml(client.name)}</strong> — ${conversationHistory.filter(h => h.role === 'user').length} messages. ${encCount > 1 ? `(${encCount} encounters on file)` : ''} You can continue the conversation.</div>`;
       messagesDiv.appendChild(welcome);
 
       for (const turn of conversationHistory) {
@@ -2344,17 +2823,28 @@
           msg.innerHTML = `<div class="message-content">${escapeHtml(turn.text)}</div>`;
         } else {
           msg.className = 'message assistant';
-          msg.innerHTML = `<div class="message-content">${parseMarkdown(turn.text || '')}</div>`;
+          msg.innerHTML = renderCompactResponse(turn.text || '');
         }
         messagesDiv.appendChild(msg);
       }
 
-      // Render follow-up checklist in a chat message
-      if (client.checklist && client.checklist.length > 0) {
+      // Show ICD-10 codes from encounters
+      const allText = conversationHistory.map(h => h.text || '').join(' ');
+      const icdCodes = latestEnc && latestEnc.icdCodes ? latestEnc.icdCodes : detectICD10Codes(allText);
+      if (icdCodes.length > 0) {
+        const icdMsg = document.createElement('div');
+        icdMsg.className = 'message assistant';
+        icdMsg.innerHTML = `<div class="message-content" style="background:#faf5ff;border-color:#c4b5fd;">${renderICD10Chips(icdCodes)}</div>`;
+        messagesDiv.appendChild(icdMsg);
+      }
+
+      // Render follow-up checklist
+      const checklist = latestEnc ? (latestEnc.checklist || client.checklist || []) : (client.checklist || []);
+      if (checklist.length > 0) {
         const checkMsg = document.createElement('div');
         checkMsg.className = 'message assistant';
         let checkHtml = '<div class="message-content" style="background:#fffbeb;border-color:#fbbf24;"><strong>\ud83d\udccb Follow-Up Checklist</strong><ul class="checklist" style="margin-top:8px;">';
-        client.checklist.forEach((item, idx) => {
+        checklist.forEach((item, idx) => {
           const checkedAttr = item.done ? 'checked' : '';
           const checkedClass = item.done ? 'checked' : '';
           checkHtml += `<li class="checklist-item ${checkedClass}"><label><input type="checkbox" ${checkedAttr} onchange="updateClientChecklist('${clientId}', ${idx}, this.checked)"> ${escapeHtml(item.text)}</label></li>`;
@@ -2365,8 +2855,9 @@
       }
 
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      updateRiskTierBadge(client.riskTier);
-      renderBarrierChips(client.barriers || []);
+      updateRiskTierBadge(_lastRiskTier);
+      renderBarrierChips(_lastBarriers);
+      window._activePatientId = clientId;
       saveSession();
       updateSessionInfo();
     }
@@ -2854,12 +3345,18 @@
           // Count action cards (exclude generate card)
           const actionCardCount = cards.filter(c => c.type !== 'generate').length;
 
+          // ── Detect ICD-10 codes from full conversation ──
+          const allConvoText = conversationHistory.map(h => h.text || '').join(' ');
+          const detectedICD = detectICD10Codes(allConvoText);
+          const icd10Html = renderICD10Chips(detectedICD);
+
           loadingMsg.innerHTML = `<div class="message-content">
             ${chatSafetyHtml}
             ${empathyHtml}
             ${whatToSayHtml}
             ${unblockerHtml}
             ${suggestedQHtml}
+            ${icd10Html}
             ${needsMapHtml}
             <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">
               📋 ${actionCardCount} action card${actionCardCount !== 1 ? 's' : ''} ready →
@@ -3034,39 +3531,101 @@
       });
     });
 
-    // Clear session (with optional session summary + client save)
+    // Clear session — just clears, no save prompt
     clearBtn.addEventListener('click', () => {
-      if (conversationHistory.length < 4) {
-        // Not enough history — offer to save for a client then clear
-        const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
-        if (saveName && saveName.trim()) {
-          saveClientSession(saveName.trim());
-        }
+      if (conversationHistory.length === 0) {
         performClearSession();
         return;
       }
-
-      const choice = confirm('Would you like a session summary before clearing?\n\nOK = Generate summary, then clear\nCancel = Clear without summary');
-      if (choice) {
-        generateSessionSummary().then(() => {
-          const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
-          if (saveName && saveName.trim()) {
-            saveClientSession(saveName.trim());
-          }
-          performClearSession();
-        });
-      } else {
-        const saveName = prompt('Save this session for a client? Enter client name (or Cancel to discard):');
-        if (saveName && saveName.trim()) {
-          saveClientSession(saveName.trim());
+      if (conversationHistory.length >= 4) {
+        const choice = confirm('Would you like a session summary before clearing?\n\nOK = Generate summary, then clear\nCancel = Clear immediately');
+        if (choice) {
+          generateSessionSummary().then(() => performClearSession());
+          return;
         }
-        performClearSession();
       }
+      performClearSession();
     });
+
+    // ── SAVE SESSION (EHR WORKFLOW) ──
+    saveBtn.addEventListener('click', () => {
+      if (conversationHistory.length < 2) {
+        alert('Nothing to save — start a conversation first.');
+        return;
+      }
+      showSaveModal();
+    });
+
+    function showSaveModal() {
+      const modal = document.getElementById('save-modal');
+      const body = document.getElementById('save-modal-body');
+      const clients = loadClients();
+      const existingPatients = Object.values(clients).sort((a, b) => b.lastSession - a.lastSession);
+
+      let html = `
+        <div style="margin-bottom:16px;">
+          <button class="save-choice-btn" onclick="saveAsNewPatient()">
+            <h4>➕ New Patient Session</h4>
+            <p>Create a new patient chart and save this session as the first encounter</p>
+          </button>
+        </div>`;
+
+      if (existingPatients.length > 0) {
+        html += `
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;">📁 Save to Existing Patient Chart</div>
+          <div style="max-height:300px;overflow-y:auto;">
+            ${existingPatients.map(c => {
+              const date = new Date(c.lastSession).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+              const encCount = (c.encounters || []).length || 1;
+              const needsHtml = (c.needs || []).slice(0, 4).map(n => `<span style="background:#dbeafe;color:#1e40af;padding:1px 5px;border-radius:3px;font-size:9px;">${escapeHtml(n)}</span>`).join(' ');
+              return `<div class="patient-select-item" onclick="saveToExistingPatient('${c.id}')">
+                <div class="patient-name">${escapeHtml(c.name)}</div>
+                <div class="patient-meta">${date} • ${encCount} encounter${encCount !== 1 ? 's' : ''} • ${needsHtml}</div>
+              </div>`;
+            }).join('')}
+          </div>`;
+      }
+
+      body.innerHTML = html;
+      modal.style.display = 'flex';
+    }
+
+    function closeSaveModal() {
+      document.getElementById('save-modal').style.display = 'none';
+    }
+
+    function saveAsNewPatient() {
+      const name = prompt('Enter patient name:');
+      if (!name || !name.trim()) return;
+      const id = saveClientSession(name.trim());
+      closeSaveModal();
+      window._activePatientId = id;
+      const confirmMsg = document.createElement('div');
+      confirmMsg.className = 'message system';
+      confirmMsg.innerHTML = `<div class="message-content">✅ Session saved to <strong>${escapeHtml(name.trim())}</strong>'s chart as Encounter #1. ICD-10 codes and screenings recorded.</div>`;
+      messagesDiv.appendChild(confirmMsg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function saveToExistingPatient(patientId) {
+      const clients = loadClients();
+      const patient = clients[patientId];
+      if (!patient) return;
+      saveEncounterToPatient(patientId);
+      closeSaveModal();
+      window._activePatientId = patientId;
+      const encCount = (patient.encounters || []).length;
+      const confirmMsg = document.createElement('div');
+      confirmMsg.className = 'message system';
+      confirmMsg.innerHTML = `<div class="message-content">✅ Session saved to <strong>${escapeHtml(patient.name)}</strong>'s chart as Encounter #${encCount}. ICD-10 codes and screenings updated.</div>`;
+      messagesDiv.appendChild(confirmMsg);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
 
     function performClearSession() {
       conversationHistory = [];
       activeScreeningState = null;
+      window._activePatientId = null;
       clearSavedSession();
       clearPanels();
       updateSessionInfo();
