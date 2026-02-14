@@ -2080,6 +2080,7 @@
         else if (/🎯/.test(firstLine)) cards.push({ type: 'quick', title: '### ' + firstLine, body });
         else if (/📋/.test(firstLine)) cards.push({ type: 'checklist', title: '### ' + firstLine, body });
         else if (/⚠/.test(firstLine)) cards.push({ type: 'safety', title: '### ' + firstLine, body, tier: data.riskTier });
+        else if (/🩺/.test(firstLine)) { /* Screening recommendation rendered as screening-suggest card — skip to avoid duplicate */ }
         else cards.push({ type: 'generic', title: '### ' + firstLine, body });
       }
 
@@ -3389,6 +3390,20 @@
             needsMapHtml += '</div></div>';
           }
 
+          // ── Inline screening recommendations in chat (clickable Start buttons) ──
+          let screeningRecHtml = '';
+          if (data.screeningSuggestions && data.screeningSuggestions.length > 0) {
+            screeningRecHtml = `<div style="margin-top:8px;">
+              <div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;">🩺 RECOMMENDED SCREENINGS</div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                ${data.screeningSuggestions.map(s => `<div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;">
+                  <div style="flex:1;font-size:11px;color:#92400e;"><strong>${escapeHtml(s.form)}</strong>: ${escapeHtml(s.reason)}</div>
+                  <button class="btn" style="font-size:11px;padding:4px 12px;background:var(--accent);color:white;border:none;border-radius:6px;font-weight:700;cursor:pointer;white-space:nowrap;" onclick="sendMessage('start ${escapeHtml(s.form)}')">▶ Start</button>
+                </div>`).join('')}
+              </div>
+            </div>`;
+          }
+
           // Count action cards (exclude generate card)
           const actionCardCount = cards.filter(c => c.type !== 'generate').length;
 
@@ -3403,6 +3418,7 @@
             ${whatToSayHtml}
             ${unblockerHtml}
             ${suggestedQHtml}
+            ${screeningRecHtml}
             ${icd10Html}
             ${needsMapHtml}
             <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">

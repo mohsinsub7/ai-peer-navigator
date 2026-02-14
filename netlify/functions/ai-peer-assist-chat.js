@@ -456,8 +456,8 @@ const SCREENING_FORMS = {
           anxiety: { score: anxiety, positive: anxiety >= 3 },
           depression: { score: depression, positive: depression >= 3 }
         },
-        recommendation: anxiety >= 3 ? "Consider GAD-7 for anxiety assessment. " : "" +
-          depression >= 3 ? "Consider PHQ-9 for depression assessment." : total < 3 ? "No further screening indicated at this time." : "Monitor and re-screen as needed."
+        recommendation: (anxiety >= 3 ? "Consider GAD-7 for anxiety assessment. " : "") +
+          (depression >= 3 ? "Consider PHQ-9 for depression assessment." : (total < 3 ? "No further screening indicated at this time." : "Monitor and re-screen as needed."))
       };
     }
   },
@@ -915,7 +915,7 @@ function detectScreeningForm(message) {
   if (/gad7/.test(msg)) return "GAD-7";
   if (/pcptsd/.test(msg)) return "PC-PTSD-5";
   if (/pcl5/.test(msg)) return "PCL-5";
-  if (/\bassist\b/.test(message.toLowerCase())) return "ASSIST";
+  if (/\b(who\s*)?assist\b/i.test(msg) && /\b(screen|start|administer|begin|give|do|run|conduct)\b/i.test(message)) return "ASSIST";
   if (/audit/.test(msg)) return "AUDIT";
   if (/dast/.test(msg)) return "DAST-10";
   if (/cage/.test(msg)) return "CAGE-AID";
@@ -942,9 +942,26 @@ function buildScreeningPrompt(formId, screeningState) {
   const { currentQuestion, responses } = screeningState;
   const totalQuestions = form.questions.length;
 
+  // ASQ acuity question: if all 4 questions answered AND any positive AND acuity not yet asked
+  if (formId === 'ASQ' && currentQuestion >= totalQuestions && responses.some(r => r > 0) && !screeningState.acuityAsked) {
+    return {
+      complete: false,
+      formId,
+      formName: form.name,
+      questionNumber: totalQuestions + 1,
+      totalQuestions: totalQuestions + 1,
+      timeframe: form.timeframe,
+      questionText: form.acuityQuestion,
+      options: form.responseOptions,
+      progress: 100,
+      isAcuityQuestion: true
+    };
+  }
+
   if (currentQuestion >= totalQuestions) {
     // All questions answered — score and interpret
-    const result = form.scoring(responses);
+    const acuityResponse = screeningState.acuityResponse;
+    const result = form.scoring(responses, acuityResponse);
     return {
       complete: true,
       result,
@@ -2602,6 +2619,96 @@ export default async function handler(req) {
         const currentQ = incomingScreeningState.currentQuestion || 0;
         const responses = [...(incomingScreeningState.responses || [])];
 
+        // Handle ASQ acuity question response
+        if (incomingScreeningState.acuityAsked) {
+          // This is the response to the acuity question
+          const options = form.responseOptions;
+          const parsedValue = parseScreeningResponse(message, options);
+          if (parsedValue === null) {
+            const optionLabels = options.map((o, i) => `${i}: ${o.label}`).join('\n');
+            return new Response(JSON.stringify({
+              response: `I didn't understand that response. Please enter a number or text matching one of these options:\n\n${optionLabels}`,
+              mode: 'screening',
+              screeningState: incomingScreeningState
+            }), { status: 200, headers: H });
+          }
+          // Score with acuity response
+          const result = form.scoring(responses, parsedValue);
+          let resultText = `### Screening Complete: ${form.name}\n\n`;
+          resultText += `**Total Score:** ${result.total} / ${form.maxScore}\n`;
+          resultText += `**Severity:** ${result.severity}\n\n`;
+          if (result.recommendation) resultText += `---\n\n### Recommendation\n${result.recommendation}\n\n`;
+          resultText += `---\n\n### Response Summary\n`;
+          form.questions.forEach((q, i) => {
+            const optLabel = form.responseOptions.find(o => o.value === responses[i])?.label || responses[i];
+            resultText += `${i + 1}. ${q}: **${optLabel}** (${responses[i]})\n`;
+          });
+          resultText += `${form.questions.length + 1}. ${form.acuityQuestion}: **${parsedValue === 1 ? 'Yes' : 'No'}** (${parsedValue})\n`;
+          if (result.acute || result.positive) {
+            resultText += `\n---\n\n### SAFETY ALERT\n${result.recommendation}\n`;
+          }
+          console.log(`[AI-PEER-ASSIST] ASQ complete: score=${result.total}, severity=${result.severity}, acute=${result.acute}`);
+          return new Response(JSON.stringify({
+            response: resultText,
+            mode: 'screening_complete',
+            screeningResult: {
+              formId: incomingScreeningState.formId,
+              formName: form.name,
+              score: result.total,
+              maxScore: form.maxScore,
+              severity: result.severity,
+              recommendation: result.recommendation,
+              responses,
+              questions: form.questions,
+              responseLabels: responses.map(r => form.responseOptions.find(o => o.value === r)?.label || String(r)),
+              acute: result.acute,
+              suicidalIdeation: result.positive
+            }
+          }), { status: 200, headers: H });
+        }
+
+        // Handle PC-PTSD-5 gate question: if first response is "No" to the screening question,
+        // the screening is complete (no trauma exposure) — skip all 5 questions
+        if (incomingScreeningState.formId === 'PC-PTSD-5' && currentQ === 0 && form.screeningQuestion && !incomingScreeningState.gateAnswered) {
+          const gateOptions = [{ label: "No", value: 0 }, { label: "Yes", value: 1 }];
+          const gateValue = parseScreeningResponse(message, gateOptions);
+          if (gateValue === 0) {
+            // No trauma exposure — screening complete with score 0
+            console.log(`[AI-PEER-ASSIST] PC-PTSD-5 gate question: No trauma exposure — screening complete`);
+            return new Response(JSON.stringify({
+              response: `### Screening Complete: ${form.name}\n\n**Result:** No trauma exposure identified.\n**Total Score:** 0 / ${form.maxScore}\n**Severity:** Negative screen\n\n---\n\n### Recommendation\nNo further trauma assessment needed at this time unless clinical judgment indicates otherwise. Continue to monitor and reassess if new information emerges.`,
+              mode: 'screening_complete',
+              screeningResult: {
+                formId: 'PC-PTSD-5',
+                formName: form.name,
+                score: 0,
+                maxScore: form.maxScore,
+                severity: 'Negative screen (no trauma exposure)',
+                recommendation: 'No further trauma assessment needed at this time unless clinical judgment indicates otherwise.',
+                responses: [0],
+                questions: [form.screeningQuestion],
+                responseLabels: ['No']
+              }
+            }), { status: 200, headers: H });
+          }
+          // If Yes — they do have trauma exposure, continue to the actual screening questions
+          // Don't record this as a regular response — start the actual questions
+          const promptData = buildScreeningPrompt('PC-PTSD-5', {
+            formId: 'PC-PTSD-5', currentQuestion: 0, responses: [], startTime: incomingScreeningState.startTime
+          });
+          let nextText = `### ${form.name}\n`;
+          nextText += `**Trauma exposure confirmed.** Now administering the 5 screening questions.\n\n`;
+          nextText += `**Question 1 of 5** | ${form.timeframe}\n\n`;
+          nextText += `> ${form.questions[0]}\n\n`;
+          nextText += form.responseOptions.map((o, i) => `**${i}** — ${o.label}`).join('\n');
+          return new Response(JSON.stringify({
+            response: nextText,
+            mode: 'screening',
+            screeningState: { formId: 'PC-PTSD-5', currentQuestion: 0, responses: [], startTime: incomingScreeningState.startTime, gateAnswered: true },
+            screeningProgress: { questionNumber: 1, totalQuestions: 5, progress: 0, formName: form.name }
+          }), { status: 200, headers: H });
+        }
+
         // Get options for current question
         let options;
         if (form.variableOptions && Array.isArray(form.responseOptions[currentQ])) {
@@ -2709,16 +2816,21 @@ export default async function handler(req) {
           }), { status: 200, headers: H });
         }
 
-        // Present next question
+        // Present next question (or ASQ acuity question)
         let nextText = `### ${promptData.formName}\n`;
         nextText += `**Question ${promptData.questionNumber} of ${promptData.totalQuestions}** | ${promptData.timeframe}\n\n`;
         nextText += `> ${promptData.questionText}\n\n`;
         nextText += promptData.options.map((o, i) => `**${i}** — ${o.label}`).join('\n');
 
+        // If this is the ASQ acuity question, mark it in the state
+        const stateToSend = promptData.isAcuityQuestion
+          ? { ...updatedState, acuityAsked: true }
+          : updatedState;
+
         return new Response(JSON.stringify({
           response: nextText,
           mode: 'screening',
-          screeningState: updatedState,
+          screeningState: stateToSend,
           screeningProgress: {
             questionNumber: promptData.questionNumber,
             totalQuestions: promptData.totalQuestions,
@@ -3010,13 +3122,16 @@ export default async function handler(req) {
 
     // ── Proactive screening suggestions (only in guidance mode, not resource lookups) ──
     let screeningSuggestions = null;
-    const isResourceLookup = /\b(address|location|where is|agency|center|service center|tell me about|find me|near|close to|directions|hours|phone number)\b/i.test(message);
+    // Only treat short messages (<150 chars) with resource keywords as resource lookups.
+    // Long clinical narratives mentioning "close to home" or "near" should NOT be skipped.
+    const isResourceLookup = message.length < 150 && /\b(where is|what is the address|find me|tell me about|give me directions|how do I get to)\b/i.test(message);
     if (!wantsNote && !wantsReferralEmail && !wantsWarmHandoff && !isResourceLookup) {
       const suggestions = detectScreeningNeed(message, history);
       if (suggestions.length > 0) {
         screeningSuggestions = suggestions;
-        // NOTE: Screening suggestions are NO LONGER appended to response text.
-        // The frontend renders them as a separate clickable card using data.screeningSuggestions.
+        // Append a brief screening mention to the response text so it's visible in chat
+        const screeningNames = suggestions.map(s => s.form).join(', ');
+        response += `\n\n---\n\n### 🩺 Recommended Screening\nBased on what this client is presenting, the following validated screening instrument${suggestions.length > 1 ? 's are' : ' is'} recommended: **${screeningNames}**.\nClick the \"▶ Start Screening\" button in the Action Cards panel to administer.`;
       }
     }
 
