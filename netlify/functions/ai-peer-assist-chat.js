@@ -904,6 +904,10 @@ const SCREENING_REQUEST_PATTERNS = [
 ];
 
 function isScreeningRequest(message) {
+  // Exclude messages about screening results / next steps / scores — these are follow-up queries, not new screening requests
+  if (/\b(score|scored|result|next steps|based on|recommend|what (does|should|do)|interpret|means?|severity|follow.?up)\b/i.test(message)) {
+    return false;
+  }
   return SCREENING_REQUEST_PATTERNS.some(p => p.test(message));
 }
 

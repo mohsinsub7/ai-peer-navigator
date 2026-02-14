@@ -2964,6 +2964,20 @@
       container.insertBefore(el, container.firstChild);
     }
 
+    function scrollToActionPanelTop() {
+      const panel = document.getElementById('action-panel');
+      if (panel) {
+        panel.scrollTop = 0;
+        // Flash highlight on the first card so the user sees it
+        const firstCard = panel.querySelector('.action-card');
+        if (firstCard) {
+          firstCard.style.transition = 'box-shadow 0.3s';
+          firstCard.style.boxShadow = '0 0 0 3px var(--accent)';
+          setTimeout(() => { firstCard.style.boxShadow = ''; }, 2000);
+        }
+      }
+    }
+
     function copyActionCardContent(btn) {
       const body = btn.closest('.action-card').querySelector('.output-content');
       navigator.clipboard.writeText(body.textContent).then(() => {
@@ -3159,7 +3173,7 @@
           renderOutputInActionPanel('note', responseText, noteFormat);
           loadingMsg.innerHTML = `<div class="message-content">
             <strong>📋 ${noteFormat} Note generated.</strong>
-            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See note in Action Panel →</div>
+            <div class="see-cards-link" onclick="scrollToActionPanelTop()">See note in Action Panel →</div>
           </div>`;
 
         } else if (data.mode === 'referral_email') {
@@ -3167,7 +3181,7 @@
           renderOutputInActionPanel('referral_email', responseText);
           loadingMsg.innerHTML = `<div class="message-content">
             <strong>📧 Referral email drafted.</strong>
-            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See email in Action Panel →</div>
+            <div class="see-cards-link" onclick="scrollToActionPanelTop()">See email in Action Panel →</div>
           </div>`;
 
         } else if (data.mode === 'warm_handoff') {
@@ -3175,7 +3189,7 @@
           renderOutputInActionPanel('warm_handoff', responseText);
           loadingMsg.innerHTML = `<div class="message-content">
             <strong>📞 Warm handoff script ready.</strong>
-            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">See script in Action Panel →</div>
+            <div class="see-cards-link" onclick="scrollToActionPanelTop()">See script in Action Panel →</div>
           </div>`;
 
         } else if (isScreening) {
@@ -3421,7 +3435,7 @@
             ${screeningRecHtml}
             ${icd10Html}
             ${needsMapHtml}
-            <div class="see-cards-link" onclick="document.getElementById('action-panel').scrollIntoView()">
+            <div class="see-cards-link" onclick="scrollToActionPanelTop()">
               📋 ${actionCardCount} action card${actionCardCount !== 1 ? 's' : ''} ready →
             </div>
           </div>`;
